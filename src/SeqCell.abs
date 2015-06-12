@@ -1,0 +1,245 @@
+module SeqCell;
+
+fimport IOArray from Data.Array.IO; // the Array type
+fimport newArray_ from Data.Array.IO;
+fimport readArray from Data.Array.IO;
+fimport writeArray from Data.Array.IO;
+fimport randomRIO from System.Random;
+
+
+interface ICell {
+    Int take_();
+    Int take2();
+    Unit put_(Int value);
+    Bool hasValue();
+}
+
+class Cell implements ICell {
+  Int value = 0; // initialise to 0
+  Int take_() {
+     // this works because because we can
+     // await on fields to change without busy-wait
+     await (this.value != 0);
+     return this.value;
+  }
+  Unit put_(Int value) {
+     this.value = value;
+  }
+  Int take2() {
+     return this.value;
+  }
+  Bool hasValue() {
+	Bool b = False;
+     if (this.value != 0) {
+     	b = True;
+     }
+     return b;
+  }
+}
+
+
+interface IPASeq {
+	Unit run_();
+	Unit run2_();
+	Unit initClique();
+	Unit initClique2();
+	Unit initRemain();
+	Unit initRemain2();
+	
+}
+
+class PASeq(IOArray<Int, Int> toBe2, IOArray<Int, ICell> toBeArray, Int m0, Int d, Int k, Int num, Int n) implements IPASeq{
+
+    Unit run_(){
+	this.initClique();
+	this.initRemain();
+	Int i = 1;
+	while (i <= (this.n - this.k) / (2 * this.d)) {
+            Int temp = this.k + (i-1) * (2 * this.d);
+            Int j = 2;
+            Int source = 0;
+            Int target = 0;
+            while (j <= 2 * this.d) {
+		source = randomRIO(Pair(1,temp));
+                target = temp + j;
+		ICell c = readArray(toBeArray, source);
+		Fut<Int> f = c!take2();
+		Int value = f.get;
+		Bool conflict = False;
+		Int tt = temp + 2;
+		while(tt < target)
+		{
+			c = readArray(toBeArray, tt);
+			f = c!take2();
+			Int a = f.get;
+			if (value == a)
+				{conflict = True;}
+			tt = tt + 2;
+		}
+		if (~conflict)
+                {
+			j = j + 2;
+			c = readArray(toBeArray, target);
+			Fut<Unit> f2 = c!put_(value);
+			f2.get;
+		}
+            }
+            i = i + 1;
+        }
+     i = 1;
+     //while(i <= n)
+     //{
+	//ICell c = readArray(toBeArray, i);
+	//i = i + 1;
+	//Fut<Int> f = c!take2();
+	//Int a = f.get;
+	//println(toString(a));
+	//println("\n");
+     //}
+    }
+    Unit run2_(){
+	this.initClique2();
+	this.initRemain2();
+	//println("Hello");
+	//Int i = 1;
+	//while (i <= (this.n - this.k) / (2 * this.d)) {
+        //    Int temp = this.k + (i-1) * (2 * this.d);
+         //   Int j = 2;
+         //   Int source = 0;
+         //   Int target = 0;
+         //   while (j <= 2 * this.d) {
+	//	source = randomRIO(Pair(1,temp));
+           //     target = temp + j;
+	//	Int value = readArray(toBe2, source);
+	//	Bool conflict = False;
+	//	Int tt = temp + 2;
+	//	while(tt < target)
+	//	{
+	//		Int a = readArray(toBe2, tt);
+	//		if (value == a)
+	//			{conflict = True;}
+	//		tt = tt + 2;
+	//	}
+	//	if (~conflict)
+         //       {
+	//		j = j + 2;
+	//		writeArray(toBe2, target, value);
+	//	}
+        //   }
+         //   i = i + 1;
+       // }
+	//i = 1;
+	//while(i <= n){
+	   //Int a = readArray(toBe2, i);
+	   //println(toString(a));
+	  // println("\n");
+	  // i = i + 1;
+	//}
+    }
+    Unit initClique() {
+        Int index = 1;
+        Int i = 1;
+        Int j = 0;
+        Fut<Unit>  fu;
+        while (i <= this.m0 -1) {
+            j = i + 1;
+            while (j <= this.m0) {
+            	ICell c = new Cell();
+            	fu = c!put_(i);
+            	fu.get;
+                writeArray(this.toBeArray, index, c);
+                index = index + 1;
+                c = new Cell();
+                fu = c!put_(j);
+                fu.get;
+                writeArray(this.toBeArray, index, c);
+                index = index + 1;
+                j = j + 1;
+            }
+            i = i + 1;
+        }
+    }
+
+    Unit initClique2() {
+        Int index = 1;
+        Int i = 1;
+        Int j = 0;
+        while (i <= this.m0 -1) {
+            j = i + 1;
+            while (j <= this.m0) {
+		writeArray(this.toBe2, index, i);
+                index = index + 1;
+		writeArray(this.toBe2, index, j);
+                index = index + 1;
+                j = j + 1;
+            }
+            i = i + 1;
+        }
+	i = 1;
+    }
+
+    Unit initRemain() {
+     Int temp = this.k + 1;
+     Int i = this.m0 + 1;
+     Int j = 1;
+     while (i <= this.num) {
+	j = 1;
+        while (j <= d) {
+             ICell c = new Cell();
+             Fut<Unit> f = c!put_(i);
+             f.get;
+             writeArray(toBeArray, temp, c);
+	     //writeArray(this.toBe2, temp, i);
+	     c = new Cell();
+	     f = c!put_(0);
+             f.get;
+	     temp = temp + 1;
+	     writeArray(toBeArray, temp, c);
+	     //writeArray(this.toBe2, temp, 0);
+             temp = temp + 1;
+             j = j + 1;
+        }
+        i = i + 1;
+    }
+   }
+
+    Unit initRemain2() {
+     Int temp = this.k + 1;
+     Int i = this.m0 + 1;
+     Int j = 1;
+     while (i <= this.num) {
+	j = 1;
+        while (j <= d) {
+	     writeArray(this.toBe2, temp, i);
+	     temp = temp + 1;
+	     writeArray(this.toBe2, temp, 0);
+             temp = temp + 1;
+             j = j + 1;
+        }
+        i = i + 1;
+    }
+   }
+}
+
+
+{
+	Int num = 100;
+	Int m0 = 5;
+	Int m = 3;
+	Int k = m0 * (m0 - 1);
+	Int n = k + (num - m0) * 2*m;
+	IOArray<Int,Int> arr = newArray_(Pair(1, n));
+	IOArray<Int,ICell> toBeArray = newArray_(Pair(1, n));
+	IPASeq seq = new PASeq(arr, toBeArray, m0, m, k, num, n);
+	Fut<Unit> f = seq!run_();
+	f.get;
+     Int i = 1;
+     while(i <= n)
+     {
+	ICell c = readArray(toBeArray, i);
+	i = i + 1;
+	Fut<Int> ff = c!take2();
+	Int a = ff.get;
+	println(toString(a));
+     }
+}

@@ -1,0 +1,320 @@
+module ParPro;
+
+// The mutable-array operations
+fimport IOArray from Data.Array.IO; // the Array type
+fimport newArray_ from Data.Array.IO;
+fimport readArray from Data.Array.IO;
+fimport writeArray from Data.Array.IO;
+
+// For having (top-level) global arrays
+fimport unsafePerformIO from System.IO.Unsafe;
+
+// // For generating random numbers
+fimport randomRIO from System.Random; // randomRIO :: Pair<Low,High> -> IO a
+
+// the edge-array initialization is sequential
+// after the array initialization, all workers start working in parallel
+
+def Int workers() = 4;         // how many workers (threads) running in parallel
+
+def Int d() = 3;               // the attachment (friendliness) degree
+
+def Int num() = 10000;         // the maximum people we want to simulate
+
+def Int num0() = 5;            // how many people in the start
+
+def Int k0() = num0() * (num0() - 1); // the given initial "social" connections (cells, edges*2) (the initial social is a complete graph)
+
+def Int graphArraySize() = k0() + (num() - num0()) * 2 * d() ;          // the size of the graph-array. number-of-edges * 2
+
+def Int workerSize() = ((num() - num0()) / workers()) * 2 * d(); // the size of the chunk of the graph-array for each worker
+
+def IOArray<Int, Promise<Int>> graphArray() = unsafePerformIO(newArray_(Pair(1, graphArraySize())));
+
+def IOArray<Int, IWorker> workerArray() = unsafePerformIO(newArray_(Pair(0, workers()))); // TODO: it contains an extra element, change it to (1, workers)
+
+
+interface IWorker {
+  Unit run_();
+  Unit init_();
+}
+
+interface IPassive {
+  Unit delegate(Promise<Int> ft, Int source, Int target);
+}
+
+class Passive(Int f) implements IPassive {
+    Unit delegate(Promise<Int> ft, Int source, Int target) {
+        await ft$;
+        Int u = ft.pro_get;
+        Int pn = workers() -1;
+        Bool b = this.conflictCheck(u, target);
+        if (b) {
+		    Int te = this.f - 1 + ((target-this.f)/(2*d())) * 2*d();
+		    Int source = randomRIO(Pair(1,te));
+  	   	Promise<Int> c = readArray(graphArray, source);
+            	this.delegate(c, source, target);
+        }
+        else {
+		    Promise<Int> c = readArray(graphArray, target);
+		    c.pro_give(u);
+        }
+
+    }
+    Bool conflictCheck(Int value, Int target) {
+        Int fCurrentNode = this.f + ((target-(this.f))/(2*d())) * (2*d());
+        Int lCurrentNode = fCurrentNode + (2 * d()) - 1;
+        Int i = fCurrentNode + 1;
+        Int item = 0;
+        Bool found = False;
+        Int v = 0;
+        while (i <= lCurrentNode) {
+	        Promise<Int> c = readArray(graphArray(), i);
+	        Bool b = c.pro_isempty;
+	        if (not(b)) {
+		        v = c.pro_get;
+        	    if (value == v) {
+                  	found = True;
+                  	i = lCurrentNode + 1; //just to break the while
+		        }
+            }
+            i = i + 2;
+        }
+        return found;
+    }
+}
+
+
+class Worker(Int f, Int l) implements IWorker {
+   IOArray<Int,Fut<Unit>> getsDels;
+   Int getBound = 0;
+    
+   {
+    getBound = (l - f + 1) / 2;
+	getsDels = newArray_(Pair(0, getBound));
+   }
+
+	Unit init_() {
+		Int temp = f;
+ 		Int firstNode = (f - k0() - 1) / (2 * d()) + num0() + 1; // The first node id of the partition
+		Int i = firstNode;
+		Int lastNode = firstNode + (l - f + 1) / (2 * d()) - 1;		
+		Int j = 1;
+		Promise<Int> c;
+ 		while (i <= lastNode) {
+	 		j = 1;
+    			while (j <= d()) {
+         			c = pro_new;
+         			c.pro_give(i);
+         			writeArray(graphArray(), temp, c);
+	     			c = pro_new;
+	     			temp = temp + 1;
+	     			writeArray(graphArray(), temp, c);
+         			temp = temp + 1;
+         			j = j + 1;
+     			}
+     			i = i + 1;
+		}
+	}
+
+   Unit run_() {
+       Int i = 1;
+       Int temp = 0;
+	   Int getIndex = 1;
+       Int j = 0;
+       Int pn = workers() -1;
+
+	   IWorker otherWorker;
+       IPassive p = new local Passive(f);
+
+       // makes new social connections (edges)
+       while (i <= (l - f + 1) / (2 * d())) {
+           temp = f - 1 + (i-1) * (2 * d());
+           j = 2;
+           Int source = 0;
+           Int target = 0;
+           while (j <= 2 * d()) {
+               source = randomRIO(Pair(1,temp));
+               target = temp + j;
+		Promise<Int> c = readArray(graphArray, source);
+		Bool b = c.pro_isempty;
+		if (b) {
+			Fut<Unit> fi2 = p ! delegate(c, source, target);
+			writeArray(getsDels, getIndex, fi2);
+			getIndex = getIndex + 1;
+		}
+		else {
+		    Int u = c.pro_get;
+		    Int k = temp + 2;
+		    Bool isConflict = False;
+		    while (k < target) {
+			Promise<Int> pro_temp = readArray(graphArray(), k);
+			k = k + 2;
+			Bool b2 =pro_temp.pro_isempty;
+			if (not(b2)) {
+				Int real_temp = pro_temp.pro_get;
+				if (u == real_temp) {
+					isConflict = True;
+					k = target;
+				}
+			}
+		    }
+		    if (isConflict)
+			{j = j - 2;}
+		    else {
+		    	Promise<Int> c2 = readArray(graphArray(), target);
+		    	c2.pro_give(u);
+		    }
+		}	
+		j = j + 2;
+           }
+           i = i + 1;
+       }
+
+       // one while loops to synchronize
+
+       i = 1;
+       while (i <= getIndex - 1) {
+           Fut<Unit> f = readArray(getsDels, i);
+	       await f?;
+	       i = i + 1;
+       }
+
+   }
+
+}
+
+
+{
+ // init-clique initializes the started complete sub-graph
+ Int index = 1;
+ Int i = 1;                     // i is for the 1st-loop
+ Int j = 0;                     // j is for the 2nd-loop
+ Fut<Unit>  fu;                 // each edge created is (i,j)
+ Promise<Int> c;
+ while (i <= num0() -1) {
+     j = i + 1;
+     while (j <= num0()) {
+         c = pro_new;
+         c.pro_give(i);
+         writeArray(graphArray(), index, c);
+         index = index + 1;
+         c = pro_new;
+         c.pro_give(j);
+         writeArray(graphArray(), index, c);
+         index = index + 1;
+         j = j + 1;
+     }
+     i = i + 1;
+ }
+
+ // create workers
+ i = 1;
+ IWorker w;
+ Int l = 0;
+ while (i<workers()) {
+     Int f = k0() + (i-1) * workerSize() + 1;
+     l = k0() + i * workerSize();
+     w = new Worker(f, l);
+     writeArray(workerArray(), i-1, w);
+	 i = i + 1;
+ }
+ w = new Worker(l + 1, graphArraySize());
+ writeArray(workerArray(), workers()-1, w);
+
+
+ IOArray<Int, Fut<Unit>> syncArray = newArray_(Pair(0, workers())); // TODO: also has to change to (0, workers)
+
+//Start initialization of the array in a parallel way
+
+ Fut<Unit> ff;
+i = 0;
+ while (i < workers) {
+     w = readArray(workerArray(),i);
+	 ff = w ! init_();
+     writeArray(syncArray, i, ff);
+	 i = i + 1;
+ }
+
+
+// wait for workers to make sure all the array is initialized
+
+ i = 0;
+ while (i < workers) {
+     ff = readArray(syncArray, i);
+	 ff.get;
+	 i = i + 1;
+ }
+ println("START RUNNING");
+
+ // run workers
+i = 0;
+ while (i < workers) {
+     w = readArray(workerArray(),i);
+	 ff = w ! run_();
+     writeArray(syncArray, i, ff);
+	 i = i + 1;
+ }
+
+ // wait for workers
+
+ i = 0;
+ while (i < workers) {
+     ff = readArray(syncArray, i);
+	 ff.get;
+	 i = i + 1;
+ }
+//NIKOLAOS: (Test case 1) This is a general test case:
+	// If it prints TRUE it means all the cells have got their values -> correct
+	// If it prints FLASE it means at least one cell have not got its value -> incorrect
+	// If it prints nothing it means some exception happened so that the main cog does not terminate normally -> incorrect 
+	// NOTE: You should comment it out while you're measuring the performance since this test case (and the next one) is time-consuming
+	// NOTE: This test case covers quite broad spectrum of logical errors
+//    i = 1;
+//    Bool full = True;
+//    while (i <= graphArraySize())
+//    {
+//	Promise<Int> yy = readArray(graphArray, i);
+//	Int ii = yy.pro_get;
+//	if (ii == 0) 
+//		full = False;
+//	i = i + 1;
+//    }
+//	println("IS FULL = ");
+//	println(toString(full));
+
+//NIKOLAOS: (Test case 2) This is a complementary test case for the first one which is even more time-consuming
+	// If it prints TRUE it means there is no conflicts for each node (no replicated friends for a person) -> correct
+	// If it prints FLASE it means at least one conflict exists (at least one person has a repetitive friend which is wrong based on PA definition) -> incorrect
+	// If it prints nothing it means some exception happened so that the main cog does not terminate normally -> incorrect 
+//	Int temp = k0() + 1 ;
+//	i = 1;
+//	Int offset = k0();
+//	Bool noConflict = True;
+//	while(i <= num() - num0()) {
+//		j = offset + 2;
+//		while (j <= offset + 2 * d() - 2) {
+//			Int k = j + 2;
+//			while (k <= offset + 2 * d()){
+//				Promise<Int> c1 = readArray(graphArray, j);
+//				Promise<Int> c2 = readArray(graphArray, k);
+//				Int n1 = c1.pro_get;
+//				Int n2 = c2.pro_get;
+//				if (n1 == n2) 
+//					noConflict = False;
+//				k = k + 2;
+//			}
+//			j = j + 2;
+//		} 
+//		offset = offset + 2 * d();
+//		i = i + 1;
+//	}
+//	println("No Conflict? ");
+//	println(toString(noConflict));
+
+//NIKOLAOS: (Test case 3) This is just to check whether the summation of the sizes of partitions is equal to the size of the whole array
+	// if it prints TRUE, it means it is equal -> correct
+	// Otherwise it is FALSE -> incorrect
+	
+
+}
