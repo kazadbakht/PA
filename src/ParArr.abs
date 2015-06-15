@@ -1,0 +1,221 @@
+module ParArr;
+
+import * from Params;
+import * from TestArr;
+
+// The mutable-array operations
+fimport IOArray from Data.Array.IO; // the Array type
+fimport newArray_ from Data.Array.IO;
+fimport readArray from Data.Array.IO;
+fimport writeArray from Data.Array.IO;
+
+// For having (top-level) global arrays
+fimport unsafePerformIO from System.IO.Unsafe;
+
+// // For generating random numbers
+fimport randomRIO from System.Random; // randomRIO :: Pair<Low,High> -> IO a
+
+// the edge-array initialization is sequential
+// after the array initialization, all workers start working in parallel
+
+def IOArray<Int, Int> graphArray() = unsafePerformIO(newArray_(Pair(1, graphArraySize())));
+
+def IOArray<Int, IWorker> workerArray() = unsafePerformIO(newArray_(Pair(0, workers()))); // TODO: it contains an extra element, change it to (1, workers)
+
+
+interface IWorker {
+  Unit run_();
+  Unit init_();
+}
+
+interface IPassive {
+  Unit delegate(Int source, Int target);
+}
+
+class Passive(Int f) implements IPassive {
+    Unit delegate(Int source, Int target) {
+        await not(readArray(graphArray(), source) == 0);
+        Int u = readArray(graphArray(), source);
+        Int pn = workers() -1;
+        Bool b = this.conflictCheck(u, target);
+        if (b) {
+		    Int te = this.f - 1 + ((target-this.f)/(2*d())) * 2*d();
+		    Int source = randomRIO(Pair(1,te));
+          	this.delegate(source, target);
+        }
+        else {
+		    writeArray(graphArray(), target,u);
+        }
+
+    }
+    Bool conflictCheck(Int value, Int target) {
+        Int fCurrentNode = this.f + ((target-(this.f))/(2*d())) * (2*d());
+        Int lCurrentNode = fCurrentNode + (2 * d()) - 1;
+        Int i = fCurrentNode + 1;
+        Int item = 0;
+        Bool found = False;
+        Int v = 0;
+        while (i <= lCurrentNode) {
+	        v = readArray(graphArray(), i);
+	        Bool b = not(v==0);
+	        if (b) {
+        	    if (value == v) {
+                  	found = True;
+                  	i = lCurrentNode + 1; //just to break the while
+		        }
+            }
+            i = i + 2;
+        }
+        return found;
+    }
+}
+
+
+class Worker(Int f, Int l) implements IWorker {
+   IOArray<Int,Fut<Unit>> getsDels;
+   Int getBound = 0;
+    
+   {
+    getBound = (l - f + 1) / 2;
+	getsDels = newArray_(Pair(0, getBound));
+   }
+
+	Unit init_() {
+		Int temp = f;
+ 		Int firstNode = (f - k0() - 1) / (2 * d()) + num0() + 1; // The first node id of the partition
+		Int i = firstNode;
+		Int lastNode = firstNode + (l - f + 1) / (2 * d()) - 1;		
+		Int j = 1;
+ 		while (i <= lastNode) {
+	 		j = 1;
+    			while (j <= d()) {
+         			writeArray(graphArray(), temp, i);
+	     			temp = temp + 1;
+	     			writeArray(graphArray(), temp, 0);
+         			temp = temp + 1;
+         			j = j + 1;
+     			}
+     			i = i + 1;
+		}
+	}
+
+   Unit run_() {
+       Int i = 1;
+       Int temp = 0;
+	   Int getIndex = 1;
+       Int j = 0;
+       Int pn = workers() -1;
+
+	   IWorker otherWorker;
+       IPassive p = new local Passive(f);
+
+       // makes new social connections (edges)
+       while (i <= (l - f + 1) / (2 * d())) {
+           temp = f - 1 + (i-1) * (2 * d());
+           j = 2;
+           Int source = 0;
+           Int target = 0;
+           while (j <= 2 * d()) {
+               source = randomRIO(Pair(1,temp));
+               target = temp + j;
+               Fut<Unit> fi2 = p ! delegate(source, target);
+		       writeArray(getsDels, getIndex, fi2);
+               j = j + 2;
+		       getIndex = getIndex + 1;
+           }
+           i = i + 1;
+       }
+
+       // one while loops to synchronize
+
+       i = 1;
+       while (i <= getBound) {
+           Fut<Unit> f = readArray(getsDels, i);
+	       await f?;
+	       i = i + 1;
+       }
+
+   }
+
+}
+
+
+{
+ // init-clique initializes the started complete sub-graph
+ Int index = 1;
+ Int i = 1;                     // i is for the 1st-loop
+ Int j = 0;                     // j is for the 2nd-loop
+ Fut<Unit>  fu;                 // each edge created is (i,j)
+ while (i <= num0() -1) {
+     j = i + 1;
+     while (j <= num0()) {
+         writeArray(graphArray(), index, i);
+         index = index + 1;
+         writeArray(graphArray(), index, j);
+         index = index + 1;
+         j = j + 1;
+     }
+     i = i + 1;
+ }
+
+ // create workers
+ i = 1;
+ IWorker w;
+ Int l = 0;
+ while (i<workers()) {
+     Int f = k0() + (i-1) * workerSize() + 1;
+     l = k0() + i * workerSize();
+     w = new Worker(f, l);
+     writeArray(workerArray(), i-1, w);
+	 i = i + 1;
+ }
+ w = new Worker(l + 1, graphArraySize());
+ writeArray(workerArray(), workers()-1, w);
+
+
+ IOArray<Int, Fut<Unit>> syncArray = newArray_(Pair(0, workers())); // TODO: also has to change to (0, workers)
+
+//Start initialization of the array in a parallel way
+
+ Fut<Unit> ff;
+i = 0;
+ while (i < workers) {
+     w = readArray(workerArray(),i);
+	 ff = w ! init_();
+     writeArray(syncArray, i, ff);
+	 i = i + 1;
+ }
+
+
+// wait for workers to make sure all the array is initialized
+
+ i = 0;
+ while (i < workers) {
+     ff = readArray(syncArray, i);
+	 ff.get;
+	 i = i + 1;
+ }
+
+ // run workers
+i = 0;
+ while (i < workers) {
+     w = readArray(workerArray(),i);
+	 ff = w ! run_();
+     writeArray(syncArray, i, ff);
+	 i = i + 1;
+ }
+
+ // wait for workers
+
+ i = 0;
+ while (i < workers) {
+     ff = readArray(syncArray, i);
+	 ff.get;
+	 i = i + 1;
+ }
+
+
+ Test t = new local TestArr();
+ t.test(graphArray());
+
+}
