@@ -1,0 +1,31 @@
+module CellImpl;
+
+export *;
+
+interface ICell {
+    Int take_();
+    Int take2();
+    Unit put_(Int value);
+    Bool hasValue();
+}
+
+class Cell implements ICell {
+  Int value = 0; // initialise to 0
+  Int take_() {
+     await (this.value != 0);
+     return this.value;
+  }
+  Int take2() {
+     return this.value;
+  }
+  Unit put_(Int value) {
+     this.value = value;
+  }
+  Bool hasValue() {
+      Bool b = False;
+      if (this.value != 0) {
+          b = True;
+      }
+      return b;
+  }
+}

@@ -1,5 +1,8 @@
 module ParCell;
 
+import * from Params;
+import * from CellImpl;
+
 // The mutable-array operations
 fimport IOArray from Data.Array.IO; // the Array type
 fimport newArray_ from Data.Array.IO;
@@ -14,20 +17,6 @@ fimport randomRIO from System.Random; // randomRIO :: Pair<Low,High> -> IO a
 
 // the edge-array initialization is sequential
 // after the array initialization, all workers start working in parallel
-
-def Int workers() = 4;         // how many workers (threads) running in parallel
-
-def Int d() = 3;               // the attachment (friendliness) degree
-
-def Int num() = 10000;         // the maximum people we want to simulate
-
-def Int num0() = 5;            // how many people in the start
-
-def Int k0() = num0() * (num0() - 1); // the given initial "social" connections (cells, edges*2) (the initial social is a complete graph)
-
-def Int graphArraySize() = k0() + (num() - num0()) * 2 * d() ;          // the size of the graph-array. number-of-edges * 2
-
-def Int workerSize() = ((num() - num0()) / workers()) * 2 * d(); // the size of the chunk of the graph-array for each worker
 
 def IOArray<Int, ICell> graphArray() = unsafePerformIO(newArray_(Pair(1, graphArraySize())));
 
@@ -161,35 +150,6 @@ class Worker(Int f, Int l) implements IWorker {
 
    }
 
-}
-
-
-interface ICell {
-    Int take_();
-    Int take2();
-    Unit put_(Int value);
-    Bool hasValue();
-}
-
-class Cell implements ICell {
-  Int value = 0; // initialise to 0
-  Int take_() {
-     await (this.value != 0);
-     return this.value;
-  }
-  Int take2() {
-     return this.value;
-  }
-  Unit put_(Int value) {
-     this.value = value;
-  }
-  Bool hasValue() {
-      Bool b = False;
-      if (this.value != 0) {
-          b = True;
-      }
-      return b;
-  }
 }
 
 

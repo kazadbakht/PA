@@ -1,41 +1,13 @@
 module SeqCell;
 
+import * from Params;
+import * from CellImpl;
+
 fimport IOArray from Data.Array.IO; // the Array type
 fimport newArray_ from Data.Array.IO;
 fimport readArray from Data.Array.IO;
 fimport writeArray from Data.Array.IO;
 fimport randomRIO from System.Random;
-
-
-interface ICell {
-    Int take_();
-    Int take2();
-    Unit put_(Int value);
-    Bool hasValue();
-}
-
-class Cell implements ICell {
-  Int value = 0; // initialise to 0
-  Int take_() {
-     // this works because because we can
-     // await on fields to change without busy-wait
-     await (this.value != 0);
-     return this.value;
-  }
-  Unit put_(Int value) {
-     this.value = value;
-  }
-  Int take2() {
-     return this.value;
-  }
-  Bool hasValue() {
-	Bool b = False;
-     if (this.value != 0) {
-     	b = True;
-     }
-     return b;
-  }
-}
 
 
 interface IPASeq {
@@ -48,18 +20,18 @@ interface IPASeq {
 	
 }
 
-class PASeq(IOArray<Int, Int> toBe2, IOArray<Int, ICell> toBeArray, Int m0, Int d, Int k, Int num, Int n) implements IPASeq{
+class PASeq(IOArray<Int, Int> toBe2, IOArray<Int, ICell> toBeArray) implements IPASeq{
 
     Unit run_(){
 	this.initClique();
 	this.initRemain();
 	Int i = 1;
-	while (i <= (this.n - this.k) / (2 * this.d)) {
-            Int temp = this.k + (i-1) * (2 * this.d);
+	while (i <= (graphArraySize() - k0()) / (2 * d())) {
+            Int temp = k0() + (i-1) * (2 * d());
             Int j = 2;
             Int source = 0;
             Int target = 0;
-            while (j <= 2 * this.d) {
+            while (j <= 2 * d()) {
 		source = randomRIO(Pair(1,temp));
                 target = temp + j;
 		ICell c = readArray(toBeArray, source);
@@ -141,9 +113,9 @@ class PASeq(IOArray<Int, Int> toBe2, IOArray<Int, ICell> toBeArray, Int m0, Int 
         Int i = 1;
         Int j = 0;
         Fut<Unit>  fu;
-        while (i <= this.m0 -1) {
+        while (i <= num0() -1) {
             j = i + 1;
-            while (j <= this.m0) {
+            while (j <= num0()) {
             	ICell c = new Cell();
             	fu = c!put_(i);
             	fu.get;
@@ -164,9 +136,9 @@ class PASeq(IOArray<Int, Int> toBe2, IOArray<Int, ICell> toBeArray, Int m0, Int 
         Int index = 1;
         Int i = 1;
         Int j = 0;
-        while (i <= this.m0 -1) {
+        while (i <= num0() -1) {
             j = i + 1;
-            while (j <= this.m0) {
+            while (j <= num0()) {
 		writeArray(this.toBe2, index, i);
                 index = index + 1;
 		writeArray(this.toBe2, index, j);
@@ -179,10 +151,10 @@ class PASeq(IOArray<Int, Int> toBe2, IOArray<Int, ICell> toBeArray, Int m0, Int 
     }
 
     Unit initRemain() {
-     Int temp = this.k + 1;
-     Int i = this.m0 + 1;
+     Int temp = k0() + 1;
+     Int i = num0() + 1;
      Int j = 1;
-     while (i <= this.num) {
+     while (i <= num()) {
 	j = 1;
         while (j <= d) {
              ICell c = new Cell();
@@ -204,10 +176,10 @@ class PASeq(IOArray<Int, Int> toBe2, IOArray<Int, ICell> toBeArray, Int m0, Int 
    }
 
     Unit initRemain2() {
-     Int temp = this.k + 1;
-     Int i = this.m0 + 1;
+     Int temp = k0() + 1;
+     Int i = num0() + 1;
      Int j = 1;
-     while (i <= this.num) {
+     while (i <= num()) {
 	j = 1;
         while (j <= d) {
 	     writeArray(this.toBe2, temp, i);
@@ -223,23 +195,17 @@ class PASeq(IOArray<Int, Int> toBe2, IOArray<Int, ICell> toBeArray, Int m0, Int 
 
 
 {
-	Int num = 100;
-	Int m0 = 5;
-	Int m = 3;
-	Int k = m0 * (m0 - 1);
-	Int n = k + (num - m0) * 2*m;
-	IOArray<Int,Int> arr = newArray_(Pair(1, n));
-	IOArray<Int,ICell> toBeArray = newArray_(Pair(1, n));
-	IPASeq seq = new PASeq(arr, toBeArray, m0, m, k, num, n);
+	IOArray<Int,Int> arr = newArray_(Pair(1, graphArraySize()));
+	IOArray<Int,ICell> toBeArray = newArray_(Pair(1, graphArraySize()));
+	IPASeq seq = new PASeq(arr, toBeArray);
 	Fut<Unit> f = seq!run_();
 	f.get;
      Int i = 1;
-     while(i <= n)
-     {
-	ICell c = readArray(toBeArray, i);
-	i = i + 1;
-	Fut<Int> ff = c!take2();
-	Int a = ff.get;
-	println(toString(a));
+     while(i <= graphArraySize()) {
+	     ICell c = readArray(toBeArray, i);
+	     i = i + 1;
+	     Fut<Int> ff = c!take2();
+	     Int a = ff.get;
+	     println(toString(a));
      }
 }

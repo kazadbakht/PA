@@ -1,5 +1,7 @@
 module SeqArr;
 
+import * from Params;
+
 fimport IOArray from Data.Array.IO; // the Array type
 fimport newArray_ from Data.Array.IO;
 fimport readArray from Data.Array.IO;
@@ -13,26 +15,26 @@ interface IPASeq {
 	
 }
 
-class PASeq(IOArray<Int, Int> toBe2, Int m0, Int d, Int k, Int num, Int n) implements IPASeq{
+class PASeq(IOArray<Int, Int> arr) implements IPASeq{
 
     Unit run_(){
 	this.initClique();
 	this.initRemain();
 	Int i = 1;
-	while (i <= (this.n - this.k) / (2 * this.d)) {
-            Int temp = this.k + (i-1) * (2 * this.d);
+	while (i <= (graphArraySize() - k0()) / (2 * d())) {
+            Int temp = k0() + (i-1) * (2 * d());
             Int j = 2;
             Int source = 0;
             Int target = 0;
-            while (j <= 2 * this.d) {
+            while (j <= 2 * d()) {
 		source = randomRIO(Pair(1,temp));
                 target = temp + j;
-		Int value = readArray(toBe2, source);
+		Int value = readArray(arr, source);
 		Bool conflict = False;
 		Int tt = temp + 2;
 		while(tt < target)
 		{
-			Int a = readArray(toBe2, tt);
+			Int a = readArray(arr, tt);
 			if (value == a)
 				{conflict = True;}
 			tt = tt + 2;
@@ -40,28 +42,22 @@ class PASeq(IOArray<Int, Int> toBe2, Int m0, Int d, Int k, Int num, Int n) imple
 		if (~conflict)
                 {
 			j = j + 2;
-			writeArray(toBe2, target, value);
+			writeArray(arr, target, value);
 		}
            }
             i = i + 1;
         }
-	//i = 1;
-	//while(i <= n){
-	  // Int a = readArray(toBe2, i);
-	  // println(toString(a));
-	   //i = i + 1;
-	//}
     }
     Unit initClique() {
         Int index = 1;
         Int i = 1;
         Int j = 0;
-        while (i <= this.m0 -1) {
+        while (i <= num0() -1) {
             j = i + 1;
-            while (j <= this.m0) {
-		writeArray(this.toBe2, index, i);
+            while (j <= num0()) {
+		writeArray(this.arr, index, i);
                 index = index + 1;
-		writeArray(this.toBe2, index, j);
+		writeArray(this.arr, index, j);
                 index = index + 1;
                 j = j + 1;
             }
@@ -72,15 +68,15 @@ class PASeq(IOArray<Int, Int> toBe2, Int m0, Int d, Int k, Int num, Int n) imple
 
 
     Unit initRemain() {
-     Int temp = this.k + 1;
-     Int i = this.m0 + 1;
+     Int temp = k0() + 1;
+     Int i = num0() + 1;
      Int j = 1;
-     while (i <= this.num) {
+     while (i <= num()) {
 	j = 1;
-        while (j <= d) {
-	     writeArray(this.toBe2, temp, i);
+        while (j <= d()) {
+	     writeArray(this.arr, temp, i);
 	     temp = temp + 1;
-	     writeArray(this.toBe2, temp, 0);
+	     writeArray(this.arr, temp, 0);
              temp = temp + 1;
              j = j + 1;
         }
@@ -91,13 +87,8 @@ class PASeq(IOArray<Int, Int> toBe2, Int m0, Int d, Int k, Int num, Int n) imple
 
 
 {
-	Int num = 1000000;
-	Int m0 = 5;
-	Int m = 3;
-	Int k = m0 * (m0 - 1);
-	Int n = k + (num - m0) * 2*m;
-	IOArray<Int,Int> arr = newArray_(Pair(1, n));
-	IPASeq seq = new PASeq(arr, m0, m, k, num, n);
+	IOArray<Int,Int> arr = newArray_(Pair(1, graphArraySize()));
+	IPASeq seq = new PASeq(arr);
 	Fut<Unit> f = seq!run_();
 	f.get;
 }

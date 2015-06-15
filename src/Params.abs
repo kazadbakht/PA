@@ -1,0 +1,21 @@
+module Params;
+
+export *;
+
+// For reading the number of passed enabled cores (from +RTS -N)
+fimport getNumCapabilities from Control.Concurrent;
+fimport unsafePerformIO from System.IO.Unsafe;
+
+def Int workers() = unsafePerformIO(getNumCapabilities());         // how many workers (threads) running in parallel
+
+def Int d() = 3;               // the attachment (friendliness) degree
+
+def Int num() = 1000;         // the maximum people we want to simulate
+
+def Int num0() = 5;            // how many people in the start
+
+def Int k0() = num0() * (num0() - 1); // the given initial "social" connections (cells, edges*2) (the initial social is a complete graph)
+
+def Int graphArraySize() = k0() + (num() - num0()) * 2 * d() ;          // the size of the graph-array. number-of-edges * 2
+
+def Int workerSize() = ((num() - num0()) / workers()) * 2 * d(); // the size of the chunk of the graph-array for each worker
