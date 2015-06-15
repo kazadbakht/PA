@@ -1,6 +1,7 @@
 module SeqArr;
 
 import * from Params;
+import * from TestArr;
 
 fimport IOArray from Data.Array.IO; // the Array type
 fimport newArray_ from Data.Array.IO;
@@ -91,4 +92,8 @@ class PASeq(IOArray<Int, Int> arr) implements IPASeq{
 	IPASeq seq = new PASeq(arr);
 	Fut<Unit> f = seq!run_();
 	f.get;
+
+    Test t = new local TestArr();
+    t.test(arr);
+
 }

@@ -2,6 +2,7 @@ module SeqCell;
 
 import * from Params;
 import * from CellImpl;
+import * from TestCell;
 
 fimport IOArray from Data.Array.IO; // the Array type
 fimport newArray_ from Data.Array.IO;
@@ -59,54 +60,10 @@ class PASeq(IOArray<Int, Int> toBe2, IOArray<Int, ICell> toBeArray) implements I
             i = i + 1;
         }
      i = 1;
-     //while(i <= n)
-     //{
-	//ICell c = readArray(toBeArray, i);
-	//i = i + 1;
-	//Fut<Int> f = c!take2();
-	//Int a = f.get;
-	//println(toString(a));
-	//println("\n");
-     //}
     }
     Unit run2_(){
 	this.initClique2();
 	this.initRemain2();
-	//println("Hello");
-	//Int i = 1;
-	//while (i <= (this.n - this.k) / (2 * this.d)) {
-        //    Int temp = this.k + (i-1) * (2 * this.d);
-         //   Int j = 2;
-         //   Int source = 0;
-         //   Int target = 0;
-         //   while (j <= 2 * this.d) {
-	//	source = randomRIO(Pair(1,temp));
-           //     target = temp + j;
-	//	Int value = readArray(toBe2, source);
-	//	Bool conflict = False;
-	//	Int tt = temp + 2;
-	//	while(tt < target)
-	//	{
-	//		Int a = readArray(toBe2, tt);
-	//		if (value == a)
-	//			{conflict = True;}
-	//		tt = tt + 2;
-	//	}
-	//	if (~conflict)
-         //       {
-	//		j = j + 2;
-	//		writeArray(toBe2, target, value);
-	//	}
-        //   }
-         //   i = i + 1;
-       // }
-	//i = 1;
-	//while(i <= n){
-	   //Int a = readArray(toBe2, i);
-	   //println(toString(a));
-	  // println("\n");
-	  // i = i + 1;
-	//}
     }
     Unit initClique() {
         Int index = 1;
@@ -200,12 +157,8 @@ class PASeq(IOArray<Int, Int> toBe2, IOArray<Int, ICell> toBeArray) implements I
 	IPASeq seq = new PASeq(arr, toBeArray);
 	Fut<Unit> f = seq!run_();
 	f.get;
-     Int i = 1;
-     while(i <= graphArraySize()) {
-	     ICell c = readArray(toBeArray, i);
-	     i = i + 1;
-	     Fut<Int> ff = c!take2();
-	     Int a = ff.get;
-	     println(toString(a));
-     }
+    
+    Test t = new local TestCell();
+    t.test(toBeArray);
+
 }

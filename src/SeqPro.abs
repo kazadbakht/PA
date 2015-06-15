@@ -1,5 +1,8 @@
 module SeqPro;
 
+import * from Params;
+import * from TestPro;
+
 fimport IOArray from Data.Array.IO; // the Array type
 fimport newArray_ from Data.Array.IO;
 fimport readArray from Data.Array.IO;
@@ -13,18 +16,18 @@ interface IPASeq {
 	
 }
 
-class PASeq(IOArray<Int, Promise<Int>> arr, Int m0, Int d, Int k, Int num, Int n) implements IPASeq{
+class PASeq(IOArray<Int, Promise<Int>> arr) implements IPASeq{
 
     Unit run_(){
 	this.initClique();
 	this.initRemain();
 	Int i = 1;
-	while (i <= (this.n - this.k) / (2 * this.d)) {
-            Int temp = this.k + (i-1) * (2 * this.d);
+	while (i <= (graphArraySize() - k0()) / (2 * d())) {
+            Int temp = k0() + (i-1) * (2 * d());
             Int j = 2;
             Int source = 0;
             Int target = 0;
-            while (j <= 2 * this.d) {
+            while (j <= 2 * d()) {
 		source = randomRIO(Pair(1,temp));
                 target = temp + j;
 		Promise<Int> proValue = readArray(arr, source);
@@ -61,9 +64,9 @@ class PASeq(IOArray<Int, Promise<Int>> arr, Int m0, Int d, Int k, Int num, Int n
         Int i = 1;
         Int j = 0;
 	Promise<Int> c;
-        while (i <= this.m0 -1) {
+        while (i <= num0() -1) {
             j = i + 1;
-            while (j <= this.m0) {
+            while (j <= num0()) {
 		c = pro_new;
 		c.pro_give(i);
 		writeArray(this.arr, index, c);
@@ -81,11 +84,11 @@ class PASeq(IOArray<Int, Promise<Int>> arr, Int m0, Int d, Int k, Int num, Int n
 
 
     Unit initRemain() {
-       Int temp = this.k + 1;
-       Int i = this.m0 + 1;
+       Int temp = k0() + 1;
+       Int i = num0() + 1;
        Int j = 1;
 	Promise<Int> c;
-     while (i <= this.num) {
+     while (i <= num()) {
 	j = 1;
         while (j <= d) {
 		c = pro_new;
@@ -104,13 +107,11 @@ class PASeq(IOArray<Int, Promise<Int>> arr, Int m0, Int d, Int k, Int num, Int n
 
 
 {
-	Int num = 1000000;
-	Int m0 = 5;
-	Int m = 3;
-	Int k = m0 * (m0 - 1);
-	Int n = k + (num - m0) * 2*m;
-	IOArray<Int,Promise<Int>> arr = newArray_(Pair(1, n));
-	IPASeq seq = new PASeq(arr, m0, m, k, num, n);
+	IOArray<Int,Promise<Int>> arr = newArray_(Pair(1, graphArraySize()));
+	IPASeq seq = new PASeq(arr);
 	Fut<Unit> f = seq!run_();
 	f.get;
+    
+    Test t = new local TestPro();
+    t.test(arr);
 } 	

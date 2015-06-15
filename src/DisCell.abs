@@ -2,6 +2,7 @@ module DisCell;
 
 import * from Params;
 import * from CellImpl;
+import * from TestCell;
 
 // The mutable-array operations
 fimport IOArray from Data.Array.IO; // the Array type
@@ -274,60 +275,7 @@ i = 0;
 	 ff.get;
 	 i = i + 1;
  }
-//NIKOLAOS: (Test case 1) This is a general test case:
-	// If it prints TRUE it means all the cells have got their values -> correct
-	// If it prints FLASE it means at least one cell have not got its value -> incorrect
-	// If it prints nothing it means some exception happened so that the main cog does not terminate normally -> incorrect 
-	// NOTE: You should comment it out while you're measuring the performance since this test case (and the next one) is time-consuming
-	// NOTE: This test case covers quite broad spectrum of logical errors
-    i = 1;
-    Bool full = True;
-    while (i <= graphArraySize())
-    {
-	ICell yy = readArray(graphArray, i);
-	Fut<Int> f =  yy!take2();
-	Int ii = f.get;
-	if (ii == 0) 
-		full = False;
-	i = i + 1;
-    }
-	println("IS FULL = ");
-	println(toString(full));
-
-//NIKOLAOS: (Test case 2) This is a complementary test case for the first one which is even more time-consuming
-	// If it prints TRUE it means there is no conflicts for each node (no replicated friends for a person) -> correct
-	// If it prints FLASE it means at least one conflict exists (at least one person has a repetitive friend which is wrong based on PA definition) -> incorrect
-	// If it prints nothing it means some exception happened so that the main cog does not terminate normally -> incorrect 
-	Int temp = k0() + 1 ;
-	i = 1;
-	Int offset = k0();
-	Bool noConflict = True;
-	while(i <= num() - num0()) {
-		j = offset + 2;
-		while (j <= offset + 2 * d() - 2) {
-			Int k = j + 2;
-			while (k <= offset + 2 * d()){
-				ICell c1 = readArray(graphArray(), j);
-				ICell c2 = readArray(graphArray(), k);
-				Fut<Int> f1 = c1!take2();
-				Fut<Int> f2 = c2!take2();
-				Int n1 = f1.get;
-				Int n2 = f2.get;
-				if (n1 == n2) 
-					noConflict = False;
-				k = k + 2;
-			}
-			j = j + 2;
-		} 
-		offset = offset + 2 * d();
-		i = i + 1;
-	}
-	println("No Conflict? ");
-	println(toString(noConflict));
-
-//NIKOLAOS: (Test case 3) This is just to check whether the summation of the sizes of partitions is equal to the size of the whole array
-	// if it prints TRUE, it means it is equal -> correct
-	// Otherwise it is FALSE -> incorrect
-	
-
+ 
+ Test t = new local TestCell();
+ t.test(graphArray());
 }
