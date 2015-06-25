@@ -1,8 +1,7 @@
-module DisCell;
+module DisArr;
 
 import * from Params;
-import * from CellImpl;
-import * from TestCell;
+import * from TestArr;
 
 // The mutable-array operations
 fimport IOArray from Data.Array.IO; // the Array type
@@ -37,7 +36,7 @@ interface IWorker {
 class Worker(Int f, Int l) implements IWorker {
    IOArray<Int,Fut<Unit>> getsDels;
    Int getBound = 0;
-   IOArray<Int,ICell> localArr;
+   IOArray<Int,Promise<Int>> localArr;
    Int offset = f - 1;
     
    {
@@ -51,21 +50,18 @@ class Worker(Int f, Int l) implements IWorker {
 		Int i = 1;                     // i is for the 1st-loop
 		Int j = 0;                     // j is for the 2nd-loop
 		Int temp = 1;
-		ICell c;
-		Fut<Int> f;
+		Promise<Int> c;
 		if (this.f == k0() + 1) {
 			this.offset = 0;
 			while (i <= num0() - 1) {
 			     j = i + 1;
 			     while (j <= num0()) {
-				 c = new Cell();
-				 f = c!put(i);
-				 f.get;
+				 c = pro_new;
+				 c.pro_give(i);
 				 writeArray(localArr, temp, c);
 				 temp = temp + 1;
-				 c = new Cell();
-				 f = c!put(j);
-				 f.get;
+				 c = pro_new;
+				 c.pro_give(j);
 				 writeArray(localArr, temp, c);
 				 temp = temp + 1;
 				 j = j + 1;
@@ -84,13 +80,11 @@ class Worker(Int f, Int l) implements IWorker {
  		while (i <= lastNode) {
 	 		j = 1;
     			while (j <= d()) {
-				c = new Cell();
-				f = c!put(i);
-				f.get;
+				c = pro_new;
+				c.pro_give(i);
          			writeArray(localArr, temp, c);
 	     			temp = temp + 1;
-				c = new Cell();
-				f.get;
+				c = pro_new;
 	     			writeArray(localArr, temp, c);
 	     			temp = temp + 1;
          			j = j + 1;
@@ -157,9 +151,8 @@ class Worker(Int f, Int l) implements IWorker {
 		this.delegate(ft_, target);
         }
         else {
-		ICell c = readArray(localArr, target);
-		f = c!put(u);
-		f.get;
+		    Promise<Int> c = readArray(localArr, target);
+		    c.pro_give(u);
         }
 
     }
@@ -173,15 +166,13 @@ class Worker(Int f, Int l) implements IWorker {
         Bool found = False;
         Int v = 0;
         while (i <= lCurrentNode) {
-	        ICell c = readArray(localArr, i);
-	        Fut<Bool> fb = c!hasValue();
-	        Bool b = fb.get;
-	        if (b) {
-		        Fut<Int> fi = c!take_();
-		        v = fi.get;
-        	    	if (value == v) {
-		          	found = True;
-		          	i = lCurrentNode + 1; //just to break the while
+	        Promise<Int> c = readArray(localArr, i);
+	        Bool b = c.pro_isempty;
+	        if (not(b)) {
+		    v = c.pro_get;
+        	    if (value == v) {
+                  	found = True;
+                  	i = lCurrentNode + 1; //just to break the while
 		        }
             }
             i = i + 2;
@@ -191,10 +182,9 @@ class Worker(Int f, Int l) implements IWorker {
 
    Int request(Int source) {
 	source = source - this.offset;
-	ICell c = readArray(localArray, source);
-	Fut<Int> f = c.take_();
-	await f?;
-	return c.get;
+	Promise<Int> c = readArray(localArray, source);
+	await c$;
+	return c.pro_get;
     }
 
 }
@@ -203,6 +193,8 @@ class Worker(Int f, Int l) implements IWorker {
 
 
 {
+ // init-clique initializes the started complete sub-graph
+
 
  // create workers
  i = 1;
