@@ -27,54 +27,10 @@ def IOArray<Int, IWorker> workerArray() = unsafePerformIO(newArray_(Pair(0, work
 interface IWorker {
   Unit run_();
   Unit init_();
-}
-
-interface IPassive {
   Unit delegate(Fut<Int> ft, Int target);
 }
 
-class Passive(Int f) implements IPassive {
-    Unit delegate(Fut<Int> ft, Int target) {
-        await ft?;
-        Int u = ft.get;
-        Int pn = workers() -1;
-        Bool b = this.conflictCheck(u, target);
-        if (b) {
-		Int te = this.f - 1 + ((target-this.f)/(2*d())) * 2*d();
-		Int source = randomRIO(Pair(1,te));
-		Int srcIndex = (source - k0() - 1)/ workerSize();
-		if (srcIndex < 0) srcIndex = 0;
-		else if (srcIndex > pn) srcIndex = pn;
-		IWorker otherWorker = readArray(workerArray(), srcIndex);
-		Fut<Int> ft_ = otherWorker ! request(source);
-		this.delegate(ft_, target);
-        }
-        else {
-		    writeArray(graphArray(), target, u);
-        }
 
-    }
-    Bool conflictCheck(Int value, Int target) {
-        Int fCurrentNode = this.f + ((target-(this.f))/(2*d())) * (2*d());
-        Int lCurrentNode = fCurrentNode + (2 * d()) - 1;
-        Int i = fCurrentNode + 1;
-        Int item = 0;
-        Bool found = False;
-        Int v = 0;
-        while (i <= lCurrentNode) {
-	        v = readArray(graphArray(), i);
-	        Bool b = not(v==0);
-	        if (b) {
-        	    if (value == v) {
-                  	found = True;
-                  	i = lCurrentNode + 1; //just to break the while
-		        }
-            }
-            i = i + 2;
-        }
-        return found;
-    }
-}
 
 
 class Worker(Int f, Int l) implements IWorker {
@@ -89,59 +45,55 @@ class Worker(Int f, Int l) implements IWorker {
    }
 
 	Unit init_() {
-		Int temp = f;
+		Int t = l - f + 1;
+		localArr = newArray_(Pair(1, t));
+		Int index = 1;
+		Int i = 1;                     // i is for the 1st-loop
+		Int j = 0;                     // j is for the 2nd-loop
+		 while (i <= num0() - 1) {
+		     j = i + 1;
+		     while (j <= num0()) {
+			 writeArray(localArr, index, i);
+			 index = index + 1;
+			 writeArray(localArr, index, j);
+			 index = index + 1;
+			 j = j + 1;
+		     }
+		     i = i + 1;
+		 }
+
  		Int firstNode = (f - k0() - 1) / (2 * d()) + num0() + 1; // The first node id of the partition
-		Int i = firstNode;
+		i = firstNode;
 		Int lastNode = firstNode + (l - f + 1) / (2 * d()) - 1;		
-		Int j = 1;
-		if (this.f == k0() + 1)
+		j = 1;
+		Int temp = 1;
+		if (this.f == k0() + 1) {
 			this.offset = 0;
+			temp = f;
+		}
 		else
 			this.offset = f - 1;
  		while (i <= lastNode) {
 	 		j = 1;
     			while (j <= d()) {
-         			writeArray(graphArray(), temp, i);
+         			writeArray(localArr, temp, i);
 	     			temp = temp + 1;
-	     			writeArray(graphArray(), temp, 0);
+	     			writeArray(localArr, temp, 0);
 	     			temp = temp + 1;
          			j = j + 1;
      			}
      			i = i + 1;
 		}
-
-		Int t = l - f + 1;
-		localArr = newArray_(Pair(1, t));
-		temp = f;
- 		firstNode = (f - k0() - 1) / (2 * d()) + num0() + 1; // The first node id of the partition
-		i = firstNode;
-		lastNode = firstNode + (l - f + 1) / (2 * d()) - 1;		
-		j = 1;
-		
- 		while (i <= lastNode) {
-	 		j = 1;
-    			while (j <= d()) {
-  				    t = temp - f + 1;
-         			writeArray(localArr, t, i);
-	     			temp = temp + 1;
-     				t = t + 1;
-	     			writeArray(localArr, temp - f + 1, 0);
-         			temp = temp + 1;
-         			j = j + 1;
-     			}
-     			i = i + 1;
-		}
-		i = 1;
 	}
 
    Unit run_() {
-       Int i = 1;
-       Int temp = 0;
-	   Int getIndex = 1;
-       Int j = 0;
-       Int pn = workers() -1;
-	   IWorker otherWorker;
-       IPassive p = new local Passive(f);
+	Int i = 1;
+	Int temp = 0;
+	Int getIndex = 1;
+	Int j = 0;
+	Int pn = workers() -1;
+	IWorker otherWorker;
+	IPassive p = new local Passive(f);
 
        // makes new social connections (edges)
        while (i <= (l - f + 1) / (2 * d())) {
@@ -153,8 +105,8 @@ class Worker(Int f, Int l) implements IWorker {
 		source = randomRIO(Pair(1,temp));
 		target = temp + j;
 		Int srcIndex = (source - k0() - 1) / workerSize;
-		if (srcIndex < 0)  srcIndex = 0; 
-		else if (srcIndex > pn) srcIndex = pn;
+		if (srcIndex < 0)  srcIndex = 0; // source in the initial part
+		else if (srcIndex > pn) srcIndex = pn; // source in the extra part of the last partition
 		otherWorker = readArray(workerArray, srcIndex);
 		Fut<Int> fi = otherWorker ! request(source);
 		Fut<Unit> fi2 = p ! delegate(fi, target);
@@ -176,6 +128,49 @@ class Worker(Int f, Int l) implements IWorker {
 
    }
 
+    Unit delegate(Fut<Int> ft, Int target) {
+        await ft?;
+        Int u = ft.get;
+        Int pn = workers() -1;
+        Bool b = this.conflictCheck(u, target);
+        if (b) {
+		Int te = this.f - 1 + ((target-this.f)/(2*d())) * 2*d();
+		Int source = randomRIO(Pair(1,te));
+		Int srcIndex = (source - k0() - 1)/ workerSize();
+		if (srcIndex < 0) srcIndex = 0;
+		else if (srcIndex > pn) srcIndex = pn;
+		IWorker otherWorker = readArray(workerArray(), srcIndex);
+		Fut<Int> ft_ = otherWorker ! request(source);
+		this.delegate(ft_, target);
+        }
+        else {
+		    writeArray(localArr, target - this.offset, u);
+        }
+
+    }
+    Bool conflictCheck(Int value, Int target) {
+        Int fCurrentNode = this.f + ((target-(this.f))/(2*d())) * (2*d());
+        Int lCurrentNode = (fCurrentNode + (2 * d()) - 1);
+	fCurrentNode = fCurrentNode - this.offset;
+	lCurrentNode = lCurrentNode - this.offset;
+        Int i = fCurrentNode + 1;
+        Int item = 0;
+        Bool found = False;
+        Int v = 0;
+        while (i <= lCurrentNode) {
+	        v = readArray(localArr, i);
+	        Bool b = not(v==0);
+	        if (b) {
+        	    if (value == v) {
+                  	found = True;
+                  	i = lCurrentNode + 1; //just to break the while
+		        }
+            }
+            i = i + 2;
+        }
+        return found;
+    }
+
    Int request(Int source) {
 	source = source - this.offset;
 	await not(readArray(localArray(), source) == 0);
@@ -189,21 +184,7 @@ class Worker(Int f, Int l) implements IWorker {
 
 {
  // init-clique initializes the started complete sub-graph
- Int index = 1;
- Int i = 1;                     // i is for the 1st-loop
- Int j = 0;                     // j is for the 2nd-loop
- Fut<Unit>  fu;                 // each edge created is (i,j)
- while (i <= num0() -1) {
-     j = i + 1;
-     while (j <= num0()) {
-         writeArray(graphArray(), index, i);
-         index = index + 1;
-         writeArray(graphArray(), index, j);
-         index = index + 1;
-         j = j + 1;
-     }
-     i = i + 1;
- }
+
 
  // create workers
  i = 1;
@@ -261,6 +242,6 @@ i = 0;
 	 i = i + 1;
  }
  
- Test t = new local TestArr();
- t.test(graphArray());
+ //Test t = new local TestArr();
+ //t.test(graphArray());
 }
