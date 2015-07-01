@@ -37,11 +37,12 @@ class Worker(Int f, Int l) implements IWorker {
    IOArray<Int,Fut<Unit>> getsDels;
    Int getBound = 0;
    IOArray<Int,Int> localArr;
-   Int offset = f - 1;
+   Int offset = 0;
     
    {
 	getBound = (l - f + 1) / 2;
 	getsDels = newArray_(Pair(0, getBound));
+	offset = f - 1;
    }
 
 	Unit init_() {
@@ -66,9 +67,9 @@ class Worker(Int f, Int l) implements IWorker {
 		}
 		 
 
- 		Int firstNode = (f - k0() - 1) / (2 * d()) + num0() + 1; // The first node id of the partition
+ 		Int firstNode = (this.f - k0() - 1) / (2 * d()) + num0() + 1; // The first node id of the partition
 		i = firstNode;
-		Int lastNode = firstNode + (l - f + 1) / (2 * d()) - 1;		
+		Int lastNode = firstNode + (l - this.f + 1) / (2 * d()) - 1;		
 		j = 1;
 		
 
@@ -92,7 +93,7 @@ class Worker(Int f, Int l) implements IWorker {
 	Int j = 0;
 	Int pn = workers() -1;
 	IWorker otherWorker;
-	IPassive p = new local Passive(f);
+
 
        // makes new social connections (edges)
        while (i <= (l - f + 1) / (2 * d())) {
@@ -108,7 +109,7 @@ class Worker(Int f, Int l) implements IWorker {
 		else if (srcIndex > pn) srcIndex = pn; // source in the extra part of the last partition
 		otherWorker = readArray(workerArray, srcIndex);
 		Fut<Int> fi = otherWorker ! request(source);
-		Fut<Unit> fi2 = p ! delegate(fi, target);
+		Fut<Unit> fi2 = this ! delegate(fi, target);
 		writeArray(getsDels, getIndex, fi2);
 		j = j + 2;
 		getIndex = getIndex + 1;
@@ -171,9 +172,9 @@ class Worker(Int f, Int l) implements IWorker {
     }
 
    Int request(Int source) {
-	source = source - this.offset;
-	await not(readArray(localArray(), source) == 0);
-	return readArray(localArray(), source);
+	Int source2 = source - this.offset;
+	await not(readArray(localArr, source2) == 0);
+	return readArray(localArr, source2);
     }
 
 }
@@ -186,7 +187,7 @@ class Worker(Int f, Int l) implements IWorker {
 
 
  // create workers
- i = 1;
+ Int i = 1;
  IWorker w;
  Int l = 0;
  while (i<workers()) {
@@ -196,8 +197,15 @@ class Worker(Int f, Int l) implements IWorker {
      writeArray(workerArray(), i-1, w);
 	 i = i + 1;
  }
+if (workers() != 1) {
  w = new Worker(l + 1, graphArraySize());
  writeArray(workerArray(), workers()-1, w);
+}
+else
+{
+ w = new Worker(k0() + 1, graphArraySize());
+ writeArray(workerArray(), workers()-1, w);
+}
 
 
  IOArray<Int, Fut<Unit>> syncArray = newArray_(Pair(0, workers())); // TODO: also has to change to (0, workers)

@@ -215,8 +215,15 @@ class Worker(Int f, Int l) implements IWorker {
      writeArray(workerArray(), i-1, w);
 	 i = i + 1;
  }
+if (workers() != 1) {
  w = new Worker(l + 1, graphArraySize());
  writeArray(workerArray(), workers()-1, w);
+}
+else
+{
+ w = new Worker(k0() + 1, graphArraySize());
+ writeArray(workerArray(), workers()-1, w);
+}
 
 
  IOArray<Int, Fut<Unit>> syncArray = newArray_(Pair(0, workers())); // TODO: also has to change to (0, workers)

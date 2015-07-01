@@ -9,11 +9,11 @@ fimport readArray from Data.Array.IO;
 fimport writeArray from Data.Array.IO;
 
 interface Test {
-    Unit test(IOArray<Int,Promise<Int>> arr);
+    Unit test(IOArray<Int,Promise<Int>> arr, Int size, Int f, Int l);
 }
 
 class TestPro implements Test {
-    Unit test(IOArray<Int,Promise<Int>> arr) {
+    Unit test(IOArray<Int,Promise<Int>> arr, Int size, Int f, Int l) {
     //NIKOLAOS: (Test case 1) This is a general test case:
 	// If it prints TRUE it means all the cells have got their values -> correct
 	// If it prints FLASE it means at least one cell have not got its value -> incorrect
@@ -23,11 +23,11 @@ class TestPro implements Test {
    Int i = 1;
    Int j = 1;
    Bool full = True;
-   while (i <= graphArraySize())
+   while (i <= size)
    {
 	Promise<Int> yy = readArray(arr, i);
-	Int ii = yy.pro_get;
-	if (ii == 0) 
+	Bool b = yy.pro_isempty;
+	if (b) 
 		full = False;
 	i = i + 1;
    }
@@ -38,11 +38,11 @@ class TestPro implements Test {
 	// If it prints TRUE it means there is no conflicts for each node (no replicated friends for a person) -> correct
 	// If it prints FLASE it means at least one conflict exists (at least one person has a repetitive friend which is wrong based on PA definition) -> incorrect
 	// If it prints nothing it means some exception happened so that the main cog does not terminate normally -> incorrect 
-	Int temp = k0() + 1 ;
+	Int temp = f ;
 	i = 1;
-	Int offset = k0();
+	Int offset = f - 1;
 	Bool noConflict = True;
-	while(i <= num() - num0()) {
+	while(i <= (l - f + 1) / (2*d())) {
 		j = offset + 2;
 		while (j <= offset + 2 * d() - 2) {
 			Int k = j + 2;

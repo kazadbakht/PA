@@ -1,0 +1,31 @@
+module Test1;
+
+interface Ia{
+	Unit ma();
+}
+
+interface Ib{
+	Int mb();
+}
+
+class A implements Ia{
+	Int a1 = 10;
+	Unit ma()
+	{
+		Ib ob = new B();
+		Fut<Int> f = ob ! mb();
+		Int result = f.get;
+		println(toString(result));
+	}
+}
+
+class B implements Ib{
+	Int a1 = 20;
+	Int mb(){
+		return this.a1;
+	}
+}
+{
+	Ia oa = new local A();
+	oa.ma();
+}
