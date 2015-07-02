@@ -1,0 +1,365 @@
+module ParPro2;
+
+//import * from TestPro;
+
+fimport getNumCapabilities from Control.Concurrent;
+fimport unsafePerformIO from System.IO.Unsafe;
+
+//def Int workers() = unsafePerformIO(getNumCapabilities());         // how many workers (threads) running in parallel
+
+
+// The mutable-array operations
+fimport IOArray from Data.Array.IO; // the Array type
+fimport newArray_ from Data.Array.IO;
+fimport readArray from Data.Array.IO;
+fimport writeArray from Data.Array.IO;
+
+// For having (top-level) global arrays
+fimport unsafePerformIO from System.IO.Unsafe;
+
+// // For generating random numbers
+fimport randomRIO from System.Random; // randomRIO :: Pair<Low,High> -> IO a
+
+fimport getTime from System.Clock;
+fimport diffTimeSpec from System.Clock;
+fimport Clock from System.Clock;
+fimport TimeSpec from System.Clock;
+
+// WRITE AND INCLUDE THIS FUNCTION FOR NOW in your module
+// this functions computes the difference between two time measurements
+def TimeSpec diff(TimeSpec a, TimeSpec b) = diffTimeSpec(a,b);
+
+def Int workers() = 4;
+
+def Int d() = 3;               // the attachment (friendliness) degree
+
+def Int num() = 1000000;         // the maximum people we want to simulate
+
+//def Int num0() = 5;            // how many people in the start
+
+def Int kinit() = d() * (d() + 1); // the given initial "social" connections (cells, edges*2) (the initial social is a complete graph)
+
+def Int graphArraySize() = num() * d() ;          // the size of the graph-array. number-of-edges * 2
+
+def Int workerSize() = ((num()) / workers()) * d(); // the size of the chunk of the graph-array for each worker
+
+def IOArray<Int, Promise<Int>> graphArray() = unsafePerformIO(newArray_(Pair(1, graphArraySize())));
+
+def IOArray<Int, IWorker> workerArray() = unsafePerformIO(newArray_(Pair(0, workers()))); // TODO: it contains an extra element, change it to (1, workers)
+
+
+interface IWorker {
+  Unit run_();
+  Unit init_();
+}
+
+interface IPassive {
+  Unit delegate(Promise<Int> ft, Int source, Int target);
+}
+
+class Passive(Int f) implements IPassive {
+    Unit delegate(Promise<Int> ft, Int source, Int target) {
+		//println(toString(target));
+        await ft$;
+        Int u = ft.pro_get;
+        Bool b = this.conflictCheck(u, target);
+        if (b) {
+		    Int te = ((target - 1)/d()) * d();
+		    Int source = randomRIO(Pair(1,te));
+  	   	Promise<Int> c = readArray(graphArray, source);
+            	this.delegate(c, source, target);
+			//println(toString(target*1000));
+        }
+        else {
+		    Promise<Int> c = readArray(graphArray, target);
+		    c.pro_give(u);
+			//println(toString(target*100000));
+       }
+
+    }
+    Bool conflictCheck(Int value, Int target) {
+        Int fCurrentNode = ((target - 1)/d()) * d() + 1;
+        Int lCurrentNode = fCurrentNode + d() - 1;
+        Int item = 0;
+        Bool found = False;
+	Int i = fCurrentNode;
+        Int v = 0;
+        while (i <= lCurrentNode) {
+//		if (this.f == 31) {println(toString(i));}
+	        Promise<Int> c = readArray(graphArray(), i);
+	        Bool b = c.pro_isempty;
+	        if (not(b)) {
+		        v = c.pro_get;
+//			if (this.f == 31) {println(toString(v));}
+        	    if (value == v) {
+                  	found = True;
+                  	i = lCurrentNode + 1; //just to break the while
+		        }
+            }
+            i = i + 1;
+        }
+//	if (this.f == 31) println("--");
+        return found;
+    }
+}
+
+
+class Worker(Int f, Int l, Int actNum) implements IWorker {
+   IOArray<Int,Fut<Unit>> getsDels;
+   Int getBound = 0;
+    
+   {
+    getBound = (l - f + 1);
+	getsDels = newArray_(Pair(0, getBound));
+   }
+
+	Unit init_() {
+
+	}
+
+   Unit run_() {
+       Int i = 1;
+       Int temp = f - 1;
+	   Int getIndex = 1;
+       Int j = 0;
+	   IWorker otherWorker;
+       IPassive p = new local Passive(f);
+	if (actNum == 1) {i = d + 2; temp = kinit;}
+
+       // makes new social connections (edges)
+	Int numOfNodes = (l - f + 1) / d();
+       while (i <= numOfNodes) {
+           j = 1;
+           Int source = 0;
+           Int target = 0;
+	   Int u = 0;
+           while (j <= d()) {
+               source = randomRIO(Pair(1,temp));
+               target = temp + j;
+if (source > graphArraySize || target > graphArraySize || source < 1 || target < 1) println ("What???");
+		//println(toString(source));
+		u = 0;
+		Int coin  = randomRIO(Pair(0, 1));
+		if (coin == 0){
+			if (source > kinit())
+				{u = (source - 1) / d() + 1;if (u<=0) println ("WHAT?!!!");}
+			//					println(toString(source));}
+			else 
+			{
+				Promise<Int> proFromInit = readArray(graphArray(), source);
+				u = proFromInit.pro_get;
+				if (u == -1)
+					j = j - 1;
+				else
+					{u = (source - 1) / d() + 1; if (u<=0) println ("WHAT?!!!");}
+
+			}
+		
+		}
+		else
+		{
+			Promise<Int> c = readArray(graphArray, source);
+			Bool b = c.pro_isempty;
+			if (b) {
+				Fut<Unit> fi2 = p ! delegate(c, source, target);
+//			if (this.f == 31) println(toString(target));
+//			if (this.f == 31) println(toString(source));
+				writeArray(getsDels, getIndex, fi2);
+				getIndex = getIndex + 1;
+			}
+			else{
+				u = c.pro_get;
+				if (u == -1) j = j - 1;}
+		}
+
+		if (u > 0) {
+		    Int k = temp + 1;
+		    Bool isConflict = False;
+		    while (k < target) {
+			Promise<Int> pro_temp  = readArray(graphArray(), k);
+			k = k + 1;
+			Bool b2 =pro_temp.pro_isempty;
+			if (not(b2)) {		// redundant
+				Int real_temp = pro_temp.pro_get;
+				if (u == real_temp) {
+					isConflict = True;
+					k = target;
+				}
+			}
+		    }
+		    if (isConflict) //redundant assignment to isConflict at the begining each time
+			{j = j - 1;}
+		    else {
+		    	Promise<Int> c2 = readArray(graphArray(), target);
+		    	c2.pro_give(u);
+		    }
+		}	
+		j = j + 1;
+           }
+           i = i + 1;
+	   temp = temp + d;
+       }
+//i =1;
+//Int ss = 0;
+//if (f == 1)
+//while(i<=l)
+//{
+//	Promise<Int> c = readArray(graphArray, i);
+//	Bool b = c.pro_isempty;
+//	if (not(b))
+//	ss = c.pro_get;
+//	else println("0");
+//	println(toString(ss));
+//	i = i + 1;
+//}
+       // one while loops to synchronize
+	println("DONE!");
+       i = 1;
+       while (i <= getIndex - 1) {
+           Fut<Unit> f = readArray(getsDels, i);
+	       await f?;
+	       i = i + 1;
+       }
+	println("DONE!DONE!");
+
+   }
+
+}
+
+
+{
+ // init-clique initializes the started complete sub-graph
+ Int index = 1;
+ Int i = 1;                     // i is for the 1st-loop
+ Int j = 0;                     // j is for the 2nd-loop
+ Fut<Unit>  fu;                 // each edge created is (i,j)
+ Promise<Int> c;
+
+i = 0;
+ while (i <= d()) {
+     j = 1;
+     while (j <= d()) {
+	c = pro_new;
+	index = j + (i * d());
+	if (j <= i) c.pro_give(j); else c.pro_give(-1);
+        writeArray(graphArray(), index, c);
+	j = j + 1;
+     }
+     i = i + 1;
+ }
+index = index + 1;
+ // create workers
+
+	while (index <= graphArraySize())
+	{
+		c = pro_new;
+		writeArray(graphArray(), index, c);
+		index = index + 1;
+	}
+
+ i = 1;
+ IWorker w;
+ Int l = 0;
+ while (i<workers()) {
+     Int f = (i-1) * workerSize() + 1;
+     l = i * workerSize();
+     w = new Worker(f, l, i);
+     writeArray(workerArray(), i-1, w);
+	 i = i + 1;
+ }
+
+ w = new Worker(l + 1, graphArraySize(), i);
+ writeArray(workerArray(), workers()-1, w);
+
+
+//Int numTemp = num - num0;
+//Int shareTemp = workers * (workers + 1) / 2;
+//Int wholeShare = workers * shareTemp;
+//Int thisShare = shareTemp + workers - 1;
+////println(toString(share));
+////println(toString(numTemp));
+//i = 1;
+//Int lBefore = k0();
+//while (i < workers)
+//{
+//	Int f = lBefore + 1;
+//	l = f + (numTemp * (thisShare) / wholeShare) * 2 * d() - 1;
+//	println(toString(f));
+//	println(toString(l));
+//    w = new Worker(f, l);
+//     writeArray(workerArray(), i-1, w);
+//	lBefore = l;
+//	thisShare = thisShare - 2;
+//	 i = i + 1;	
+
+//}
+
+
+//if (workers() != 1) {
+// w = new Worker(l + 1, graphArraySize());
+// writeArray(workerArray(), workers()-1, w);
+//}
+//else
+//{
+// w = new Worker(k0() + 1, graphArraySize());
+// writeArray(workerArray(), workers()-1, w);
+//}
+
+ IOArray<Int, Fut<Unit>> syncArray = newArray_(Pair(0, workers())); // TODO: also has to change to (0, workers)
+
+//Start initialization of the array in a parallel way
+
+ Fut<Unit> ff;
+i = 0;
+ while (i < workers) {
+     w = readArray(workerArray(),i);
+	 ff = w ! init_();
+     writeArray(syncArray, i, ff);
+	 i = i + 1;
+ }
+
+
+// wait for workers to make sure all the array is initialized
+
+ i = 0;
+ while (i < workers) {
+     ff = readArray(syncArray, i);
+	 ff.get;
+	 i = i + 1;
+ }
+ println("START RUNNING");
+  TimeSpec t1 = getTime(Monotonic); // getTime(Monotonic) takes a measurement
+ // run workers
+i = 0;
+ while (i < workers) {
+     w = readArray(workerArray(),i);
+	 ff = w ! run_();
+     writeArray(syncArray, i, ff);
+	 i = i + 1;
+ }
+ // wait for workers
+
+ i = 0;
+ while (i < workers) {
+     ff = readArray(syncArray, i);
+	 ff.get;
+	 i = i + 1;
+ }
+  TimeSpec t2 = getTime(Monotonic);
+
+  TimeSpec t3 = diff(t2,t1);    //  compute the difference       (t2 - t1)
+
+  println(toString(t3));  
+//i = 1;
+//while(i<=graphArraySize)
+//{
+//	c = readArray(graphArray, i);
+//	Int ss = c.pro_get;
+//	println(toString(ss));
+//	i = i + 1;
+//}
+
+// Test t = new local TestPro();
+// t.test(graphArray(), graphArraySize() - k0(), k0() + 1, graphArraySize());
+
+}

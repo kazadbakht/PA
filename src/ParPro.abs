@@ -15,8 +15,14 @@ fimport unsafePerformIO from System.IO.Unsafe;
 // // For generating random numbers
 fimport randomRIO from System.Random; // randomRIO :: Pair<Low,High> -> IO a
 
-// the edge-array initialization is sequential
-// after the array initialization, all workers start working in parallel
+fimport getTime from System.Clock;
+fimport diffTimeSpec from System.Clock;
+fimport Clock from System.Clock;
+fimport TimeSpec from System.Clock;
+
+// WRITE AND INCLUDE THIS FUNCTION FOR NOW in your module
+// this functions computes the difference between two time measurements
+def TimeSpec diff(TimeSpec a, TimeSpec b) = diffTimeSpec(a,b);
 
 def IOArray<Int, Promise<Int>> graphArray() = unsafePerformIO(newArray_(Pair(1, graphArraySize())));
 
@@ -275,7 +281,7 @@ i = 0;
 	 i = i + 1;
  }
  println("START RUNNING");
-
+  TimeSpec t1 = getTime(Monotonic); // getTime(Monotonic) takes a measurement
  // run workers
 i = 0;
  while (i < workers) {
@@ -293,7 +299,11 @@ i = 0;
 	 ff.get;
 	 i = i + 1;
  }
+  TimeSpec t2 = getTime(Monotonic);
 
+  TimeSpec t3 = diff(t2,t1);    //  compute the difference       (t2 - t1)
+
+  println(toString(t3));  
 // Test t = new local TestPro();
 // t.test(graphArray(), graphArraySize() - k0(), k0() + 1, graphArraySize());
 

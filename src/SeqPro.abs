@@ -9,6 +9,15 @@ fimport readArray from Data.Array.IO;
 fimport writeArray from Data.Array.IO;
 fimport randomRIO from System.Random;
 
+fimport getTime from System.Clock;
+fimport diffTimeSpec from System.Clock;
+fimport Clock from System.Clock;
+fimport TimeSpec from System.Clock;
+
+// WRITE AND INCLUDE THIS FUNCTION FOR NOW in your module
+// this functions computes the difference between two time measurements
+def TimeSpec diff(TimeSpec a, TimeSpec b) = diffTimeSpec(a,b);
+
 interface IPASeq {
 	Unit run_();
 	Unit initClique();
@@ -21,6 +30,7 @@ class PASeq(IOArray<Int, Promise<Int>> arr) implements IPASeq{
     Unit run_(){
 	this.initClique();
 	this.initRemain();
+  TimeSpec t1 = getTime(Monotonic); // getTime(Monotonic) takes a measurement
 	Int i = 1;
 	while (i <= (graphArraySize() - k0()) / (2 * d())) {
             Int temp = k0() + (i-1) * (2 * d());
@@ -52,12 +62,11 @@ class PASeq(IOArray<Int, Promise<Int>> arr) implements IPASeq{
            }
             i = i + 1;
         }
-	//i = 1;
-	//while(i <= n){
-	  // Int a = readArray(arr, i);
-	  // println(toString(a));
-	   //i = i + 1;
-	//}
+  TimeSpec t2 = getTime(Monotonic);
+
+  TimeSpec t3 = diff(t2,t1);    //  compute the difference       (t2 - t1)
+
+  println(toString(t3)); 
     }
     Unit initClique() {
         Int index = 1;
@@ -112,6 +121,6 @@ class PASeq(IOArray<Int, Promise<Int>> arr) implements IPASeq{
 	Fut<Unit> f = seq!run_();
 	f.get;
     
-    Test t = new local TestPro();
-    t.test(arr);
+//    Test t = new local TestPro();
+//    t.test(arr);
 } 	

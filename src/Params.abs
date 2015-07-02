@@ -12,7 +12,7 @@ def Int workers() = 4;
 
 def Int d() = 3;               // the attachment (friendliness) degree
 
-def Int num() = 100005;         // the maximum people we want to simulate
+def Int num() = 1000000;         // the maximum people we want to simulate
 
 def Int num0() = 5;            // how many people in the start
 
