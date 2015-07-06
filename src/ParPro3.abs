@@ -1,4 +1,4 @@
-module ParProRR;
+module ParProRRCacheCheck;
 
 //import * from TestPro;
 
@@ -29,11 +29,13 @@ fimport TimeSpec from System.Clock;
 // this functions computes the difference between two time measurements
 def TimeSpec diff(TimeSpec a, TimeSpec b) = diffTimeSpec(a,b);
 
-def Int workers() = 4;
+def Int workers() = 8;
+
+def roundSize() = 1000;
 
 def Int d() = 3;               // the attachment (friendliness) degree
 
-def Int num() = 1000000;         // the maximum people we want to simulate
+def Int num() = 100000;         // the maximum people we want to simulate
 
 //def Int num0() = 5;            // how many people in the start
 
@@ -114,6 +116,19 @@ class Worker(Int f, Int l, Int actNum) implements IWorker {
    }
 
 	Unit init_() {
+	Int index = 0;
+	Promise<Int> c;
+	if (f == 1)
+		index = kinit + 1;
+	else
+		index = f;
+
+	while (index <= l)
+	{
+		c = pro_new;
+		writeArray(graphArray(), index, c);
+		index = index + 1;
+	}
 
 	}
 
@@ -124,8 +139,8 @@ class Worker(Int f, Int l, Int actNum) implements IWorker {
        Int j = 0;
 	   IWorker otherWorker;
        IPassive p = new local Passive(f);
-	i = d + actNum + 1; temp = kinit + (actNum - 1) * d;
-
+	i = d + roundSize * (actNum - 1) + 2; temp = kinit + (actNum - 1) * d * roundSize;
+	//println(toString(i)); println(toString(temp));
        // makes new social connections (edges)
 	Int numOfNodes = (l - f + 1) / d();
        while (i <= num) {
@@ -138,6 +153,7 @@ class Worker(Int f, Int l, Int actNum) implements IWorker {
                target = temp + j;
 		//println(toString(source));
 		u = 0;
+		//if (target > graphArraySize) {println(toString(i)); println(toString(target));}
 		Int coin  = randomRIO(Pair(0, 1));
 		if (coin == 0){
 			if (source > kinit())
@@ -194,8 +210,16 @@ class Worker(Int f, Int l, Int actNum) implements IWorker {
 		}	
 		j = j + 1;
            }
-           i = i + workers;
-	   temp = temp + workers * d;
+	Int tte = actNum % workers;
+	Int tte2 = ((i+1 + roundSize - (d+2)) / roundSize) % workers;
+	//if (actNum == 1){println(toString(tte));println(toString(i));}
+	if (tte2 == tte){
+	i = i + 1; temp = temp + d;
+	//if (actNum == 1){println(toString(i)); println(toString(target));}
+	}
+	else {i = i + (workers-1) * roundSize + 1;
+	   temp = temp + (workers-1) * d * roundSize + d;
+	} 
        }
 //i =1;
 //Int ss = 0;
@@ -243,15 +267,15 @@ i = 0;
      }
      i = i + 1;
  }
-index = index + 1;
- // create workers
+//index = index + 1;
+// // create workers
 
-	while (index <= graphArraySize())
-	{
-		c = pro_new;
-		writeArray(graphArray(), index, c);
-		index = index + 1;
-	}
+//	while (index <= graphArraySize())
+//	{
+//		c = pro_new;
+//		writeArray(graphArray(), index, c);
+//		index = index + 1;
+//	}
 
  i = 1;
  IWorker w;
