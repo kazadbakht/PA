@@ -5,9 +5,6 @@ module ParProRR;
 fimport getNumCapabilities from Control.Concurrent;
 fimport unsafePerformIO from System.IO.Unsafe;
 
-//def Int workers() = unsafePerformIO(getNumCapabilities());         // how many workers (threads) running in parallel
-
-
 // The mutable-array operations
 fimport IOArray from Data.Array.IO; // the Array type
 fimport newArray_ from Data.Array.IO;
@@ -29,7 +26,7 @@ fimport TimeSpec from System.Clock;
 // this functions computes the difference between two time measurements
 def TimeSpec diff(TimeSpec a, TimeSpec b) = diffTimeSpec(a,b);
 
-def Int workers() = 8;
+def Int workers() = unsafePerformIO(getNumCapabilities());         // how many workers (threads) running in parallel
 
 def Int d() = 3;               // the attachment (friendliness) degree
 
