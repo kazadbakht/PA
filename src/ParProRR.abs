@@ -15,7 +15,9 @@ fimport writeArray from Data.Array.IO;
 fimport unsafePerformIO from System.IO.Unsafe;
 
 // // For generating random numbers
-fimport randomRIO from System.Random; // randomRIO :: Pair<Low,High> -> IO a
+fimport StdGen from System.Random;
+fimport mkStdGen from System.Random;
+fimport randomR from System.Random;
 
 fimport getTime from System.Clock;
 fimport diffTimeSpec from System.Clock;
@@ -30,7 +32,7 @@ def Int workers() = unsafePerformIO(getNumCapabilities());         // how many w
 
 def Int d() = 3;               // the attachment (friendliness) degree
 
-def Int num() = 100000;         // the maximum people we want to simulate
+def Int num() = 1000000;         // the maximum people we want to simulate
 
 //def Int num0() = 5;            // how many people in the start
 
@@ -55,6 +57,8 @@ interface IPassive {
 }
 
 class Passive(Int f) implements IPassive {
+    StdGen g = mkStdGen(f);      // does not matter that much what we pass to mkStdGen; the more distinctive number between workers, the better
+
     Unit delegate(Promise<Int> ft, Int source, Int target) {
 		//println(toString(target));
         await ft$;
@@ -62,7 +66,9 @@ class Passive(Int f) implements IPassive {
         Bool b = this.conflictCheck(u, target);
         if (b) {
 		    Int te = ((target - 1)/d()) * d();
-		    Int source = randomRIO(Pair(1,te));
+            Pair<Int,StdGen> pair__ = randomR(Pair(1,te), this.g);
+		    Int source = fst(pair__);
+            this.g = snd(pair__);
   	   	Promise<Int> c = readArray(graphArray, source);
             	this.delegate(c, source, target);
 			//println(toString(target*1000));
@@ -103,6 +109,7 @@ class Passive(Int f) implements IPassive {
 
 class Worker(Int f, Int l, Int actNum) implements IWorker {
    IOArray<Int,Fut<Unit>> getsDels;
+   StdGen g = mkStdGen(f);      // does not matter that much what we pass to mkStdGen; the more distinctive number between workers, the better
    Int getBound = 0;
     
    {
@@ -138,18 +145,26 @@ class Worker(Int f, Int l, Int actNum) implements IWorker {
 	//println(toString(i)); println(toString(temp));
        // makes new social connections (edges)
 	Int numOfNodes = (l - f + 1) / d();
+    Int source = 0;
+    Int target = 0;
+	Int u = 0;
+    Int coin = 0;
+    Pair<Int,StdGen> pair__ = Pair(source,this.g);
        while (i <= num) {
            j = 1;
-           Int source = 0;
-           Int target = 0;
-	   Int u = 0;
+           source = 0;
+           target = 0;
+	       u = 0;
            while (j <= d()) {
-               source = randomRIO(Pair(1,temp));
+               pair__ = randomR(Pair(1,temp), this.g);
+               source = fst(pair__);
                target = temp + j;
 		//println(toString(source));
 		u = 0;
 		//if (target > graphArraySize) {println(toString(i)); println(toString(target));}
-		Int coin  = randomRIO(Pair(0, 1));
+        pair__ = randomR(Pair(0,1), snd(pair__));
+		coin  = fst(pair__);
+        this.g = snd(pair__);
 		if (coin == 0){
 			if (source > kinit())
 				u = (source - 1) / d() + 1;
@@ -367,7 +382,7 @@ i = 0;
 //	i = i + 1;
 //}
 
-// Test t = new local TestPro();
-// t.test(graphArray(), graphArraySize() - k0(), k0() + 1, graphArraySize());
+  // Test t = new local TestPro();
+  // t.test(graphArray(), graphArraySize() - k0(), k0() + 1, graphArraySize());
 
 }
