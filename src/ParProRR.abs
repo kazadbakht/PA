@@ -11,9 +11,6 @@ fimport newArray_ from Data.Array.IO;
 fimport readArray from Data.Array.IO;
 fimport writeArray from Data.Array.IO;
 
-// For having (top-level) global arrays
-fimport unsafePerformIO from System.IO.Unsafe;
-
 // // For generating random numbers
 fimport StdGen from System.Random;
 fimport mkStdGen from System.Random;
@@ -52,71 +49,20 @@ interface IWorker {
   Unit init_();
 }
 
-interface IPassive {
-  Unit delegate(Promise<Int> ft, Int source, Int target);
-}
+// interface IPassive {
+//   Unit delegate(Promise<Int> ft, Int source, Int target);
+// }
 
-class Passive(Int f) implements IPassive {
-    StdGen g = mkStdGen(f);      // does not matter that much what we pass to mkStdGen; the more distinctive number between workers, the better
+// class Passive() implements IPassive {
+//     StdGen g = mkStdGen(3);      // does not matter that much what we pass to mkStdGen; the more distinctive number between workers, the better
 
-    Unit delegate(Promise<Int> ft, Int source, Int target) {
-		//println(toString(target));
-        await ft$;
-        Int u = ft.pro_get;
-        Bool b = this.conflictCheck(u, target);
-        if (b) {
-		    Int te = ((target - 1)/d()) * d();
-            Pair<Int,StdGen> pair__ = randomR(Pair(1,te), this.g);
-		    Int source = fst(pair__);
-            this.g = snd(pair__);
-  	   	Promise<Int> c = readArray(graphArray, source);
-            	this.delegate(c, source, target);
-			//println(toString(target*1000));
-        }
-        else {
-		    Promise<Int> c = readArray(graphArray, target);
-		    c.pro_give(u);
-			//println(toString(target*100000));
-       }
-
-    }
-    Bool conflictCheck(Int value, Int target) {
-        Int fCurrentNode = ((target - 1)/d()) * d() + 1;
-        Int lCurrentNode = fCurrentNode + d() - 1;
-        Int item = 0;
-        Bool found = False;
-	Int i = fCurrentNode;
-        Int v = 0;
-        while (i <= lCurrentNode) {
-//		if (this.f == 31) {println(toString(i));}
-	        Promise<Int> c = readArray(graphArray(), i);
-	        Bool b = c.pro_isempty;
-	        if (not(b)) {
-		        v = c.pro_get;
-//			if (this.f == 31) {println(toString(v));}
-        	    if (value == v) {
-                  	found = True;
-                  	i = lCurrentNode + 1; //just to break the while
-		        }
-            }
-            i = i + 1;
-        }
-//	if (this.f == 31) println("--");
-        return found;
-    }
-}
+// }
 
 
 class Worker(Int f, Int l, Int actNum) implements IWorker {
-   IOArray<Int,Fut<Unit>> getsDels;
+   Int getsDels = 0;
    StdGen g = mkStdGen(f);      // does not matter that much what we pass to mkStdGen; the more distinctive number between workers, the better
-   Int getBound = 0;
     
-   {
-    getBound = (l - f + 1);
-	getsDels = newArray_(Pair(0, getBound));
-   }
-
 	Unit init_() {
 	Int index = 0;
 	Promise<Int> c;
@@ -137,18 +83,18 @@ class Worker(Int f, Int l, Int actNum) implements IWorker {
    Unit run_() {
        Int i = 1;
        Int temp = f - 1;
-	   Int getIndex = 1;
        Int j = 0;
-	   IWorker otherWorker;
-       IPassive p = new local Passive(f);
+       //IPassive p = new local Passive();
 	i = d + 2 + (actNum - 1) ; temp = kinit + (actNum - 1) * d;
-	//println(toString(i)); println(toString(temp));
        // makes new social connections (edges)
 	Int numOfNodes = (l - f + 1) / d();
     Int source = 0;
     Int target = 0;
 	Int u = 0;
     Int coin = 0;
+    Fut<Unit> fi2;
+    Promise<Int> c;
+    Bool b = False;
     Pair<Int,StdGen> pair__ = Pair(source,this.g);
        while (i <= num) {
            j = 1;
@@ -159,9 +105,7 @@ class Worker(Int f, Int l, Int actNum) implements IWorker {
                pair__ = randomR(Pair(1,temp), this.g);
                source = fst(pair__);
                target = temp + j;
-		//println(toString(source));
 		u = 0;
-		//if (target > graphArraySize) {println(toString(i)); println(toString(target));}
         pair__ = randomR(Pair(0,1), snd(pair__));
 		coin  = fst(pair__);
         this.g = snd(pair__);
@@ -170,8 +114,8 @@ class Worker(Int f, Int l, Int actNum) implements IWorker {
 				u = (source - 1) / d() + 1;
 			else 
 			{
-				Promise<Int> proFromInit = readArray(graphArray(), source);
-				u = proFromInit.pro_get;
+				c = readArray(graphArray(), source);
+				u = c.pro_get;
 				if (u == -1)
 					j = j - 1;
 				else
@@ -182,14 +126,11 @@ class Worker(Int f, Int l, Int actNum) implements IWorker {
 		}
 		else
 		{
-			Promise<Int> c = readArray(graphArray, source);
-			Bool b = c.pro_isempty;
+			c = readArray(graphArray, source);
+			b = c.pro_isempty;
 			if (b) {
-				Fut<Unit> fi2 = p ! delegate(c, source, target);
-//			if (this.f == 31) println(toString(target));
-//			if (this.f == 31) println(toString(source));
-				writeArray(getsDels, getIndex, fi2);
-				getIndex = getIndex + 1;
+                getsDels = getsDels + 1;
+				this ! delegate(c, source, target);
 			}
 			else{
 				u = c.pro_get;
@@ -200,12 +141,12 @@ class Worker(Int f, Int l, Int actNum) implements IWorker {
 		    Int k = temp + 1;
 		    Bool isConflict = False;
 		    while (k < target) {
-			Promise<Int> pro_temp  = readArray(graphArray(), k);
+			c  = readArray(graphArray(), k);
 			k = k + 1;
-			Bool b2 =pro_temp.pro_isempty;
-			if (not(b2)) {		// redundant
-				Int real_temp = pro_temp.pro_get;
-				if (u == real_temp) {
+			b = c.pro_isempty;
+			if (not(b)) {		// redundant
+				coin = c.pro_get;
+				if (u == coin) {
 					isConflict = True;
 					k = target;
 				}
@@ -214,8 +155,8 @@ class Worker(Int f, Int l, Int actNum) implements IWorker {
 		    if (isConflict) //redundant assignment to isConflict at the begining each time
 			{j = j - 1;}
 		    else {
-		    	Promise<Int> c2 = readArray(graphArray(), target);
-		    	c2.pro_give(u);
+		    	c = readArray(graphArray(), target);
+		    	c.pro_give(u);
 		    }
 		}	
 		j = j + 1;
@@ -224,28 +165,53 @@ class Worker(Int f, Int l, Int actNum) implements IWorker {
 	  temp = temp + d * workers ;
 	 
        }
-//i =1;
-//Int ss = 0;
-//if (f == 1)
-//while(i<=l)
-//{
-//	Promise<Int> c = readArray(graphArray, i);
-//	Bool b = c.pro_isempty;
-//	if (not(b))
-//	ss = c.pro_get;
-//	else println("0");
-//	println(toString(ss));
-//	i = i + 1;
-//}
        // one while loops to synchronize
-       i = 1;
-       while (i <= getIndex - 1) {
-           Fut<Unit> f = readArray(getsDels, i);
-	       await f?;
-	       i = i + 1;
-       }
+       await (this.getsDels == 0);
 
    }
+
+    Unit delegate(Promise<Int> ft, Int source, Int target) {
+        await ft$;
+        Int u = ft.pro_get;
+        Bool b = this.conflictCheck(u, target);
+        if (b) {
+		    u = ((target - 1)/d()) * d();
+            Pair<Int,StdGen> pair__ = randomR(Pair(1,u), this.g);
+		    u = fst(pair__);
+            this.g = snd(pair__);
+     	   	Promise<Int> c = readArray(graphArray, u);
+           	this.delegate(c, u, target);
+        }
+        else {
+		    Promise<Int> c = readArray(graphArray, target);
+		    c.pro_give(u);
+            getsDels = getsDels -1;
+        }
+
+    }
+    Bool conflictCheck(Int value, Int target) {
+        Int i = ((target - 1)/d()) * d() + 1;
+        Int lCurrentNode = i + d() - 1;
+        Int item = 0;
+        Bool found = False;
+        Bool b = False;
+        Int v = 0;
+        Promise<Int> c;
+        while (i <= lCurrentNode) {
+	        c = readArray(graphArray(), i);
+	        b = c.pro_isempty;
+	        if (not(b)) {
+		        v = c.pro_get;
+        	    if (value == v) {
+                  	found = True;
+                  	i = lCurrentNode + 1; //just to break the while
+		        }
+            }
+            i = i + 1;
+        }
+        return found;
+    }
+
 
 }
 
@@ -258,7 +224,7 @@ class Worker(Int f, Int l, Int actNum) implements IWorker {
  Fut<Unit>  fu;                 // each edge created is (i,j)
  Promise<Int> c;
 
-i = 0;
+ i = 0;
  while (i <= d()) {
      j = 1;
      while (j <= d()) {
@@ -270,21 +236,13 @@ i = 0;
      }
      i = i + 1;
  }
-//index = index + 1;
-// // create workers
-
-//	while (index <= graphArraySize())
-//	{
-//		c = pro_new;
-//		writeArray(graphArray(), index, c);
-//		index = index + 1;
-//	}
 
  i = 1;
  IWorker w;
  Int l = 0;
+ Int f = 0;
  while (i<workers()) {
-     Int f = (i-1) * workerSize() + 1;
+     f = (i-1) * workerSize() + 1;
      l = i * workerSize();
      w = new Worker(f, l, i);
      writeArray(workerArray(), i-1, w);
@@ -294,39 +252,6 @@ i = 0;
  w = new Worker(l + 1, graphArraySize(), i);
  writeArray(workerArray(), workers()-1, w);
 
-
-//Int numTemp = num - num0;
-//Int shareTemp = workers * (workers + 1) / 2;
-//Int wholeShare = workers * shareTemp;
-//Int thisShare = shareTemp + workers - 1;
-////println(toString(share));
-////println(toString(numTemp));
-//i = 1;
-//Int lBefore = k0();
-//while (i < workers)
-//{
-//	Int f = lBefore + 1;
-//	l = f + (numTemp * (thisShare) / wholeShare) * 2 * d() - 1;
-//	println(toString(f));
-//	println(toString(l));
-//    w = new Worker(f, l);
-//     writeArray(workerArray(), i-1, w);
-//	lBefore = l;
-//	thisShare = thisShare - 2;
-//	 i = i + 1;	
-
-//}
-
-
-//if (workers() != 1) {
-// w = new Worker(l + 1, graphArraySize());
-// writeArray(workerArray(), workers()-1, w);
-//}
-//else
-//{
-// w = new Worker(k0() + 1, graphArraySize());
-// writeArray(workerArray(), workers()-1, w);
-//}
 
  IOArray<Int, Fut<Unit>> syncArray = newArray_(Pair(0, workers())); // TODO: also has to change to (0, workers)
 
@@ -373,16 +298,5 @@ i = 0;
   TimeSpec t3 = diff(t2,t1);    //  compute the difference       (t2 - t1)
 
   println(toString(t3));  
-//i = 1;
-//while(i<=graphArraySize)
-//{
-//	c = readArray(graphArray, i);
-//	Int ss = c.pro_get;
-//	println(toString(ss));
-//	i = i + 1;
-//}
-
-  // Test t = new local TestPro();
-  // t.test(graphArray(), graphArraySize() - k0(), k0() + 1, graphArraySize());
 
 }
