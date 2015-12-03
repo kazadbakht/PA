@@ -11,10 +11,10 @@ fimport newArray_ from Data.Array.IO;
 fimport readArray from Data.Array.IO;
 fimport writeArray from Data.Array.IO;
 
-// // For generating random numbers
-fimport StdGen from System.Random;
-fimport mkStdGen from System.Random;
-fimport randomR from System.Random;
+// For generating random numbers
+fimport GenIO from System.Random.MWC;
+fimport createSystemRandom from System.Random.MWC;
+fimport uniformR from System.Random.MWC;
 
 fimport getTime from System.Clock;
 fimport diffTimeSpec from System.Clock;
@@ -49,21 +49,12 @@ interface IWorker {
   Unit init_();
 }
 
-// interface IPassive {
-//   Unit delegate(Promise<Int> ft, Int source, Int target);
-// }
-
-// class Passive() implements IPassive {
-//     StdGen g = mkStdGen(3);      // does not matter that much what we pass to mkStdGen; the more distinctive number between workers, the better
-
-// }
-
-
 class Worker(Int f, Int l, Int actNum) implements IWorker {
    Int getsDels = 0;
-   StdGen g = mkStdGen(f);      // does not matter that much what we pass to mkStdGen; the more distinctive number between workers, the better
+   GenIO g; // = mkStdGen(f);      // does not matter that much what we pass to mkStdGen; the more distinctive number between workers, the better
     
 	Unit init_() {
+    g = createSystemRandom();
 	Int index = 0;
 	Promise<Int> c;
 	if (f == 1)
@@ -95,20 +86,16 @@ class Worker(Int f, Int l, Int actNum) implements IWorker {
     Fut<Unit> fi2;
     Promise<Int> c;
     Bool b = False;
-    Pair<Int,StdGen> pair__ = Pair(source,this.g);
        while (i <= num) {
            j = 1;
            source = 0;
            target = 0;
 	       u = 0;
            while (j <= d()) {
-               pair__ = randomR(Pair(1,temp), this.g);
-               source = fst(pair__);
+               source = uniformR(Pair(1,temp), this.g);
                target = temp + j;
 		u = 0;
-        pair__ = randomR(Pair(0,1), snd(pair__));
-		coin  = fst(pair__);
-        this.g = snd(pair__);
+        coin = uniformR(Pair(0,1), this.g);
 		if (coin == 0){
 			if (source > kinit())
 				u = (source - 1) / d() + 1;
@@ -176,9 +163,7 @@ class Worker(Int f, Int l, Int actNum) implements IWorker {
         Bool b = this.conflictCheck(u, target);
         if (b) {
 		    u = ((target - 1)/d()) * d();
-            Pair<Int,StdGen> pair__ = randomR(Pair(1,u), this.g);
-		    u = fst(pair__);
-            this.g = snd(pair__);
+            u = uniformR(Pair(1,u), this.g);
      	   	Promise<Int> c = readArray(graphArray, u);
            	this.delegate(c, u, target);
         }
