@@ -1,29 +1,33 @@
 module ParProRR;
 
 //import * from TestPro;
-
 fimport getNumCapabilities from Control.Concurrent;
 fimport unsafePerformIO from System.IO.Unsafe;
 
 // The mutable-array operations
-fimport IOArray from Data.Array.IO; // the Array type
-fimport newArray_ from Data.Array.IO;
-fimport readArray from Data.Array.IO;
-fimport writeArray from Data.Array.IO;
+fimport IOVector from Data.Vector.Mutable;
+fimport unsafeNew from Data.Vector.Mutable;
+fimport unsafeRead from Data.Vector.Mutable;
+fimport unsafeWrite from Data.Vector.Mutable;
 
 // For generating random numbers
 fimport GenIO from System.Random.MWC;
-fimport createSystemRandom from System.Random.MWC;
-fimport uniformR from System.Random.MWC;
+fimport createSystemRandom from System.Random.MWC; // creates new non-fixed seed taken from hardware
+fimport uniformR from System.Random.MWC;           
 
+// For measuring execution time
 fimport getTime from System.Clock;
 fimport diffTimeSpec from System.Clock;
 fimport Clock from System.Clock;
 fimport TimeSpec from System.Clock;
 
-// WRITE AND INCLUDE THIS FUNCTION FOR NOW in your module
-// this functions computes the difference between two time measurements
-def TimeSpec diff(TimeSpec a, TimeSpec b) = diffTimeSpec(a,b);
+def Bool isElem<A>(A l, List<A> ls) = case ls {
+    Nil => False;
+    Cons(l_,ls_) => l == l_ || isElem(l,ls_);
+};
+
+// this function is just an alias to an imported function, so it can be automatically lifted&used in the imperative world.
+def TimeSpec diff(TimeSpec a, TimeSpec b) = diffTimeSpec(a,b); 
 
 def Int workers() = unsafePerformIO(getNumCapabilities());         // how many workers (threads) running in parallel
 
@@ -31,129 +35,124 @@ def Int d() = 3;               // the attachment (friendliness) degree
 
 def Int num() = 1000000;         // the maximum people we want to simulate
 
-//def Int num0() = 5;            // how many people in the start
-
-def Int kinit() = d() * (d() + 1); // the given initial "social" connections (cells, edges*2) (the initial social is a complete graph)
+def Int kinit() = d() * (d() + 1); // the given initial clique "social" connections (cells, edges*2) (the initial social is a complete graph)
 
 def Int graphArraySize() = num() * d() ;          // the size of the graph-array. number-of-edges * 2
 
 def Int workerSize() = ((num()) / workers()) * d(); // the size of the chunk of the graph-array for each worker
 
-def IOArray<Int, Promise<Int>> graphArray() = unsafePerformIO(newArray_(Pair(1, graphArraySize())));
-
-def IOArray<Int, IWorker> workerArray() = unsafePerformIO(newArray_(Pair(0, workers()))); // TODO: it contains an extra element, change it to (1, workers)
-
+def IOVector<Promise<Int>> graphArray() = unsafePerformIO(unsafeNew(graphArraySize()+1));
 
 interface IWorker {
   Unit run_();
   Unit init_();
 }
 
-class Worker(Int f, Int l, Int actNum) implements IWorker {
-   Int getsDels = 0;
-   GenIO g; // = mkStdGen(f);      // does not matter that much what we pass to mkStdGen; the more distinctive number between workers, the better
+class Worker(Int f, Int l, Int workerId) implements IWorker {
+   Int aliveDelegates = 0;
+   GenIO g;
     
-	Unit init_() {
-    g = createSystemRandom();
-	Int index = 0;
-	Promise<Int> c;
-	if (f == 1)
-		index = kinit + 1;
-	else
-		index = f;
+   {
+      // create random seed, this is a heavy hardware operation, but it provides a good random seed
+      this.g = createSystemRandom(); 
+   }
 
-	while (index <= l)
-	{
-		c = pro_new;
-		writeArray(graphArray(), index, c);
-		index = index + 1;
-	}
-
-	}
+   Unit init_() {
+       Promise<Int> c;
+	   if (workerId == 1) {
+           // START INIT the full clique of the graph
+           Int index = 1;
+           Int i = 0;                     // i is for the 1st-loop
+           Int j = 0;                     // j is for the 2nd-loop
+           while (i <= d()) {
+               j = 1;
+               while (j <= d()) {
+	               c = pro_new;
+	               index = j + (i * d());
+	               if (j <= i) c.pro_give(j); else c.pro_give(-1);
+                   unsafeWrite(graphArray(), index, c);
+	               j = j + 1;
+               }
+               i = i + 1;
+           }
+           // END INIT the full clique of the graph
+           // initialize the rest of the worker-1
+	       index = kinit + 1;
+	       while (index <= l) {
+		       c = pro_new;
+		       unsafeWrite(graphArray(), index, c);
+		       index = index + 1;
+	       }
+       }
+       else {
+	     Int index = f;
+	     while (index <= l) {
+		     c = pro_new;
+		     unsafeWrite(graphArray(), index, c);
+		     index = index + 1;
+	     }
+       }
+   }
 
    Unit run_() {
-       Int i = 1;
-       Int temp = f - 1;
        Int j = 0;
-       //IPassive p = new local Passive();
-	i = d + 2 + (actNum - 1) ; temp = kinit + (actNum - 1) * d;
-       // makes new social connections (edges)
-	Int numOfNodes = (l - f + 1) / d();
-    Int source = 0;
-    Int target = 0;
-	Int u = 0;
-    Int coin = 0;
-    Fut<Unit> fi2;
-    Promise<Int> c;
-    Bool b = False;
+	   Int i = d + 2 + (workerId - 1);
+       Int temp = kinit + (workerId - 1) * d;
+       Int source = 0;
+       Int target = 0;
+	   Int u = 0;
+       Bool b = False;
+       Promise<Int> c;
        while (i <= num) {
            j = 1;
-           source = 0;
-           target = 0;
-	       u = 0;
+           List<Int> pastDraws = Nil;
            while (j <= d()) {
-               source = uniformR(Pair(1,temp), this.g);
+               source = uniformR(Pair(1,temp*2), this.g);
                target = temp + j;
-		u = 0;
-        coin = uniformR(Pair(0,1), this.g);
-		if (coin == 0){
-			if (source > kinit())
-				u = (source - 1) / d() + 1;
-			else 
-			{
-				c = readArray(graphArray(), source);
-				u = c.pro_get;
-				if (u == -1)
-					j = j - 1;
-				else
-					u = (source - 1) / d() + 1;
+		       u = 0;
+		       if (source > temp) { // this is for the coin flipping, it means that you pick from the shadow array
+                   source=source-temp;
+			       if (source > kinit())
+     				   u = (source - 1) / d() + 1;
+			       else 
+			       {            // the picked element is from the shadow-clique array
+				       c = unsafeRead(graphArray(), source);
+				       u = c.pro_get;
+				       if (u == -1)   // picked an empty element of initial clique
+					       j = j - 1; // so retry
+				       else
+					       u = (source - 1) / d() + 1;
+    	           }
+			   }
+		       else             // here you pick from the real array
+		       {
+			       c = unsafeRead(graphArray, source);
+			       b = c.pro_isempty;
+			       if (b) {
+                       aliveDelegates = aliveDelegates + 1;
+				       this ! delegate(c, source, target);
+			       }
+			       else {
+				       u = c.pro_get;
+				       if (u == -1) j = j - 1;
+                   }
+		       }
 
-			}
-		
-		}
-		else
-		{
-			c = readArray(graphArray, source);
-			b = c.pro_isempty;
-			if (b) {
-                getsDels = getsDels + 1;
-				this ! delegate(c, source, target);
-			}
-			else{
-				u = c.pro_get;
-				if (u == -1) j = j - 1;}
-		}
-
-		if (u > 0) {
-		    Int k = temp + 1;
-		    Bool isConflict = False;
-		    while (k < target) {
-			c  = readArray(graphArray(), k);
-			k = k + 1;
-			b = c.pro_isempty;
-			if (not(b)) {		// redundant
-				coin = c.pro_get;
-				if (u == coin) {
-					isConflict = True;
-					k = target;
-				}
-			}
-		    }
-		    if (isConflict) //redundant assignment to isConflict at the begining each time
-			{j = j - 1;}
-		    else {
-		    	c = readArray(graphArray(), target);
-		    	c.pro_give(u);
-		    }
-		}	
-		j = j + 1;
+		       if (u > 0) {     // then we got an actual value, so we do conflictCheck
+		           if (isElem(u,pastDraws)) j = j - 1;
+		           else {
+                       pastDraws = Cons(u,pastDraws);
+		    	       c = unsafeRead(graphArray(), target);
+		    	       c.pro_give(u);
+		           }
+		       }
+		       j = j + 1;
            }
-	  i = i + workers;
-	  temp = temp + d * workers ;
-	 
+	       i = i + workers;
+	       temp = temp + d * workers ;
        }
-       // one while loops to synchronize
-       await (this.getsDels == 0);
+       // one while loops to wait for all delegates to finish
+       await (this.aliveDelegates == 0);
 
    }
 
@@ -164,13 +163,13 @@ class Worker(Int f, Int l, Int actNum) implements IWorker {
         if (b) {
 		    u = ((target - 1)/d()) * d();
             u = uniformR(Pair(1,u), this.g);
-     	   	Promise<Int> c = readArray(graphArray, u);
+     	   	Promise<Int> c = unsafeRead(graphArray, u);
            	this.delegate(c, u, target);
         }
         else {
-		    Promise<Int> c = readArray(graphArray, target);
+		    Promise<Int> c = unsafeRead(graphArray, target);
 		    c.pro_give(u);
-            getsDels = getsDels -1;
+            aliveDelegates = aliveDelegates -1;
         }
 
     }
@@ -183,7 +182,7 @@ class Worker(Int f, Int l, Int actNum) implements IWorker {
         Int v = 0;
         Promise<Int> c;
         while (i <= lCurrentNode) {
-	        c = readArray(graphArray(), i);
+	        c = unsafeRead(graphArray(), i);
 	        b = c.pro_isempty;
 	        if (not(b)) {
 		        v = c.pro_get;
@@ -202,81 +201,55 @@ class Worker(Int f, Int l, Int actNum) implements IWorker {
 
 
 {
- // init-clique initializes the started complete sub-graph
- Int index = 1;
- Int i = 1;                     // i is for the 1st-loop
- Int j = 0;                     // j is for the 2nd-loop
- Fut<Unit>  fu;                 // each edge created is (i,j)
- Promise<Int> c;
-
- i = 0;
- while (i <= d()) {
-     j = 1;
-     while (j <= d()) {
-	c = pro_new;
-	index = j + (i * d());
-	if (j <= i) c.pro_give(j); else c.pro_give(-1);
-        writeArray(graphArray(), index, c);
-	j = j + 1;
-     }
-     i = i + 1;
- }
-
- i = 1;
+ // START creating the workers
+ Int i = 1;
  IWorker w;
- Int l = 0;
  Int f = 0;
+ Int l = 0;
+ List<IWorker> ws = Nil;
  while (i<workers()) {
-     f = (i-1) * workerSize() + 1;
-     l = i * workerSize();
+     f = (i-1) * workerSize() + 1; // start of chunk
+     l = i * workerSize();         // end of chunk
      w = new Worker(f, l, i);
-     writeArray(workerArray(), i-1, w);
+     ws = Cons(w,ws);
 	 i = i + 1;
  }
-
  w = new Worker(l + 1, graphArraySize(), i);
- writeArray(workerArray(), workers()-1, w);
+ ws = Cons(w,ws);
+ // END creating the workers
 
-
- IOArray<Int, Fut<Unit>> syncArray = newArray_(Pair(0, workers())); // TODO: also has to change to (0, workers)
-
-//Start initialization of the array in a parallel way
-
+ //Start parallel initialization of the array by workers
  Fut<Unit> ff;
-i = 0;
- while (i < workers) {
-     w = readArray(workerArray(),i);
+ List<IWorker> ws_ = ws;
+ List<Fut<Unit>> fs = Nil;
+ while (ws_ != Nil) {
+     w = head(ws_);
 	 ff = w ! init_();
-     writeArray(syncArray, i, ff);
-	 i = i + 1;
+     fs = Cons(ff,fs);
+     ws_ = tail(ws_);
  }
+ //End parallel initialization of the array by workers
 
-
-// wait for workers to make sure all the array is initialized
-
- i = 0;
- while (i < workers) {
-     ff = readArray(syncArray, i);
+ // wait for workers to finish initialize
+ while (fs != Nil) {
+     ff = head(fs);
 	 ff.get;
-	 i = i + 1;
+     fs = tail(fs);
  }
+ // START RUNNING
  println("START RUNNING");
-  TimeSpec t1 = getTime(Monotonic); // getTime(Monotonic) takes a measurement
- // run workers
-i = 0;
- while (i < workers) {
-     w = readArray(workerArray(),i);
-	 ff = w ! run_();
-     writeArray(syncArray, i, ff);
-	 i = i + 1;
+ TimeSpec t1 = getTime(Monotonic);
+ while (ws != Nil) {
+     w = head(ws);
+	 ff = w ! run_();  // run each worker
+     fs = Cons(ff,fs);
+     ws = tail(ws);
  }
- // wait for workers
-
- i = 0;
- while (i < workers) {
-     ff = readArray(syncArray, i);
+ // wait for workers to finish run
+ while (fs != Nil) {
+     ff = head(fs);
 	 ff.get;
-	 i = i + 1;
+     fs = tail(fs);
  }
   TimeSpec t2 = getTime(Monotonic);
 
