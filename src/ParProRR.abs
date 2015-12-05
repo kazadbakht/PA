@@ -101,8 +101,8 @@ class Worker(Int f, Int l, Int workerId) implements IWorker {
        Int source = 0;
        Int target = 0;
 	   Int u = 0;
-       Bool b = False;
        Promise<Int> c;
+       Maybe<Int> maybeElement = Nothing;
        while (i <= num) {
            j = 1;
            List<Int> pastDraws = Nil;
@@ -127,14 +127,14 @@ class Worker(Int f, Int l, Int workerId) implements IWorker {
 		       else             // here you pick from the real array
 		       {
 			       c = unsafeRead(graphArray, source);
-			       b = c.pro_isempty;
-			       if (b) {
+                   maybeElement = c.pro_try;
+                   if (isJust(maybeElement)) {
+				       u = fromJust(maybeElement);
+				       if (u == -1) j = j - 1;
+                   }
+                   else {
                        aliveDelegates = aliveDelegates + 1;
 				       this ! delegate(c, source, target);
-			       }
-			       else {
-				       u = c.pro_get;
-				       if (u == -1) j = j - 1;
                    }
 		       }
 
@@ -159,44 +159,40 @@ class Worker(Int f, Int l, Int workerId) implements IWorker {
     Unit delegate(Promise<Int> ft, Int source, Int target) {
         await ft$;
         Int u = ft.pro_get;
-        Bool b = this.conflictCheck(u, target);
-        if (b) {
-		    u = ((target - 1)/d()) * d();
-            u = uniformR(Pair(1,u), this.g);
-     	   	Promise<Int> c = unsafeRead(graphArray, u);
-           	this.delegate(c, u, target);
-        }
-        else {
-		    Promise<Int> c = unsafeRead(graphArray, target);
-		    c.pro_give(u);
-            aliveDelegates = aliveDelegates -1;
-        }
-
-    }
-    Bool conflictCheck(Int value, Int target) {
+        // START inlined conflictcheck
         Int i = ((target - 1)/d()) * d() + 1;
         Int lCurrentNode = i + d() - 1;
         Int item = 0;
         Bool found = False;
-        Bool b = False;
+        Maybe<Int> maybeElement = Nothing;
         Int v = 0;
         Promise<Int> c;
         while (i <= lCurrentNode) {
 	        c = unsafeRead(graphArray(), i);
-	        b = c.pro_isempty;
-	        if (not(b)) {
-		        v = c.pro_get;
-        	    if (value == v) {
+	        maybeElement = c.pro_try;
+	        if (isJust(maybeElement)) {
+		        v = fromJust(maybeElement);
+        	    if (u == v) {
                   	found = True;
                   	i = lCurrentNode + 1; //just to break the while
 		        }
             }
             i = i + 1;
         }
-        return found;
+        // END inlined conflictcheck
+        if (found) {
+		    u = ((target - 1)/d()) * d();
+            u = uniformR(Pair(1,u), this.g);
+     	   	c = unsafeRead(graphArray, u);
+           	this.delegate(c, u, target);
+        }
+        else {
+		    c = unsafeRead(graphArray, target);
+		    c.pro_give(u);
+            aliveDelegates = aliveDelegates -1;
+        }
+
     }
-
-
 }
 
 
