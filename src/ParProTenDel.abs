@@ -1,6 +1,6 @@
 module ParProTenDel;
 
-//import * from TestPro;
+import * from TestPro;
 fimport getNumCapabilities from Control.Concurrent;
 fimport unsafePerformIO from System.IO.Unsafe;
 
@@ -258,5 +258,8 @@ class Worker(Int f, Int l, Int workerId) implements IWorker {
   TimeSpec t3 = diff(t2,t1);    //  compute the difference       (t2 - t1)
 
   println(toString(t3));  
+
+  Test t = new local TestPro();
+  t.test(graphArray(), graphArraySize() - kinit(), kinit() +1, graphArraySize(), d());
 
 }
