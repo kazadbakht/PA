@@ -21,6 +21,15 @@ fimport diffTimeSpec from System.Clock;
 fimport Clock from System.Clock;
 fimport TimeSpec from System.Clock;
 
+fimport quot from Prelude;
+fimport rem from Prelude;
+
+// faster integral-only division
+def Int div(Int n, Int d) = quot(n,d);
+
+// faster integral-only modulo
+def Int mod(Int n, Int d) = rem(n,d);
+
 def Bool isElem<A>(A l, List<A> ls) = case ls {
     Nil => False;
     Cons(l_,ls_) => l == l_ || isElem(l,ls_);
@@ -39,7 +48,7 @@ def Int kinit() = d() * (d() + 1); // the given initial clique "social" connecti
 
 def Int graphArraySize() = num() * d() ;          // the size of the graph-array. number-of-edges * 2
 
-def Int workerSize() = ((num()) / workers()) * d(); // the size of the chunk of the graph-array for each worker
+def Int workerSize() = div((num()) , workers()) * d(); // the size of the chunk of the graph-array for each worker
 
 def IOVector<Int> graphArray() = unsafePerformIO(unsafeNew(graphArraySize()+1));
 
@@ -47,7 +56,7 @@ def IOVector<List<Int>> stor() = unsafePerformIO(unsafeNew(graphArraySize()+1));
 
 def IOVector<IWorker> ws2() = unsafePerformIO(unsafeNew(workers()+1)); // the only mutable shared resource, i.e., the array of workers 
 
-def Int actorIndex(Int index) = ((index-1)/d()+1 - (d() + 2))%workers();
+def Int actorIndex(Int index) = mod((div((index-1),d())+1 - (d() + 2)),workers());
 
 interface IWorker {
   Unit run_();
@@ -84,7 +93,7 @@ class Worker(Int f, Int l, Int workerId) implements IWorker {
            }
            // END INIT the full clique of the graph
            // initialize the rest of the worker-1
-	       index = kinit + 1;
+	       index = kinit() + 1;
 	       while (index <= l) {
 		       unsafeWrite(graphArray(), index, 0);
 		       index = index + 1;
@@ -100,21 +109,21 @@ class Worker(Int f, Int l, Int workerId) implements IWorker {
 
 	c = 1;
 	while (c<=graphArraySize()){
-		unsafeWrite(stor, c, Nil);
+		unsafeWrite(stor(), c, Nil);
 		c = c+ 1;
 	}
    }
 
    Unit run_() {
        Int j = 0;
-	   Int i = d + 2 + (workerId - 1);
-       Int temp = kinit + (workerId - 1) * d;
+	   Int i = d() + 2 + (workerId - 1);
+       Int temp = kinit() + (workerId - 1) * d();
        Int source = 0;
        Int target = 0;
 	   Int u = 0;
        Int c = 0;
        Maybe<Int> maybeElement = Nothing;
-       while (i <= num) {
+       while (i <= num()) {
            j = 1;
            List<Int> pastDraws = Nil;
            while (j <= d()) {
@@ -124,19 +133,19 @@ class Worker(Int f, Int l, Int workerId) implements IWorker {
 		if (source > temp) { // this is for the coin flipping, it means that you pick from the shadow array
 			source=source-temp;
 			if (source > kinit())
-			   u = (source - 1) / d() + 1;
+			   u = div((source - 1), d()) + 1;
 			else 
 			{            // the picked element is from the shadow-clique array
 			       u = unsafeRead(graphArray(), source);
 			       if (u == -1)   // picked an empty element of initial clique
 				       j = j - 1; // so retry
 			       else
-				       u = (source - 1) / d() + 1;
+				       u = div((source - 1) , d()) + 1;
 			}
 		}
 		else             // here you pick from the real array
 		{
-			u = unsafeRead(graphArray, source);
+			u = unsafeRead(graphArray(), source);
 			if (u != 0) 
 				{if (u == -1) j = j - 1;}
 			else {
@@ -157,7 +166,7 @@ class Worker(Int f, Int l, Int workerId) implements IWorker {
 				Int t = head(l);
 				Int at = actorIndex(t);
 				println(toString(at));
-				IWorker w = unsafeRead(ws2, at);
+				IWorker w = unsafeRead(ws2(), at);
 				w ! resolve(u,t);
                                 l = tail(l);
                         }
@@ -165,8 +174,8 @@ class Worker(Int f, Int l, Int workerId) implements IWorker {
 		}
 		       j = j + 1;
            }
-	   i = i + workers;
-	   temp = temp + d * workers ;
+	   i = i + workers();
+	   temp = temp + d() * workers() ;
        }
        // one while loops to wait for all delegates to finish
        await (this.aliveDelegates == 0);
@@ -175,11 +184,11 @@ class Worker(Int f, Int l, Int workerId) implements IWorker {
 
 
     Unit request(Int source, Int target){
-	Int value = unsafeRead(graphArray, source);
+	Int value = unsafeRead(graphArray(), source);
 	if  (value != 0)
 	{
 		Int at = actorIndex(target);
-		IWorker w = unsafeRead(ws2, at);
+		IWorker w = unsafeRead(ws2(), at);
 		w ! resolve(value, target);
 	}
 	else
@@ -190,7 +199,7 @@ class Worker(Int f, Int l, Int workerId) implements IWorker {
     }
     Unit resolve(Int ft, Int target) {
         // START inlined conflictcheck
-        Int i = ((target - 1)/d()) * d() + 1;
+        Int i = div((target - 1),d()) * d() + 1;
         Int lCurrentNode = i + d() - 1;
         Int item = 0;
         Bool found = False;
@@ -209,9 +218,9 @@ class Worker(Int f, Int l, Int workerId) implements IWorker {
 		Int source = 0;
 		v = -1;
 		while (v == -1) {
-			v = ((target - 1)/d()) * d();
+			v = div((target - 1),d()) * d();
 			source = uniformR(Pair(1,v), this.g);
-			v = unsafeRead(graphArray, source);
+			v = unsafeRead(graphArray(), source);
 		}
 		if (v!=0)
 			this.resolve(v, target);
@@ -223,12 +232,12 @@ class Worker(Int f, Int l, Int workerId) implements IWorker {
 		}
 	}
         else {
-		unsafeWrite(graphArray, target, ft);
+		unsafeWrite(graphArray(), target, ft);
 		List<Int> l = unsafeRead(stor(), target);
 		while (l != Nil) {
 			Int t = head(l);
 			Int at = actorIndex(t);
-			IWorker w = unsafeRead(ws2, at);
+			IWorker w = unsafeRead(ws2(), at);
 			w ! resolve(ft,t);
 		        l = tail(l);
 		}
@@ -253,12 +262,12 @@ class Worker(Int f, Int l, Int workerId) implements IWorker {
      l = i * workerSize();         // end of chunk
      w = new Worker(f, l, i);
      ws = Cons(w,ws);
-     unsafeWrite(ws2, i-1, w); 
+     unsafeWrite(ws2(), i-1, w); 
 	 i = i + 1;
  }
  w = new Worker(l + 1, graphArraySize(), i);
  ws = Cons(w,ws);
- unsafeWrite(ws2, i-1, w);
+ unsafeWrite(ws2(), i-1, w);
  // END creating the workers
 
  //Start parallel initialization of the array by workers
@@ -302,7 +311,7 @@ class Worker(Int f, Int l, Int workerId) implements IWorker {
   println(toString(t3));  
 //i = 1;
 //while (i<= graphArraySize()){
-//	Int pp = unsafeRead(graphArray, i);
+//	Int pp = unsafeRead(graphArray(), i);
 //	println(toString(pp));
 //	i = i + 1;
 //}
