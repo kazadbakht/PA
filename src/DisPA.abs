@@ -20,20 +20,30 @@ fimport getTime from System.Clock;
 fimport diffTimeSpec from System.Clock;
 fimport Clock from System.Clock;
 fimport TimeSpec from System.Clock;
+fimport quot from Prelude; 
+fimport rem from Prelude; 
+
+// faster integral-only division 
+def Int div(Int n, Int d) = quot(n,d);  
+// faster integral-only modulo 
+def Int mod(Int n, Int d) = rem(n,d); 
 
 def Bool isElem<A>(A l, List<A> ls) = case ls {
     Nil => False;
     Cons(l_,ls_) => l == l_ || isElem(l,ls_);
 };
+ 
+ 
+
 
 // this function is just an alias to an imported function, so it can be automatically lifted&used in the imperative world.
 def TimeSpec diff(TimeSpec a, TimeSpec b) = diffTimeSpec(a,b); 
 
 def Int workers() = unsafePerformIO(getNumCapabilities());         // how many workers (threads) running in parallel
 
-def Int localIndex(Int index) = (((index-1)/d()+1 - (d() + 2))/workers())*d() + (index-1)%d();
+def Int localIndex(Int index) = div((div(index-1,d())+1 - (d() + 2)),workers())*d() + mod(index-1,d());
 
-def Int actorIndex(Int index) = ((index-1)/d()+1 - (d() + 2))%workers();
+def Int actorIndex(Int index) = mod(div(index-1,d())+1 - (d() + 2), workers());
 
 def Int d() = 3;               // the attachment (friendliness) degree
 
@@ -41,9 +51,9 @@ def Int num() = 100000;         // the maximum people we want to simulate
 
 def Int kinit() = d() * (d() + 1); // the given initial clique "social" connections (cells, edges*2) (the initial social is a complete graph)
 
-def Int graphArraySize() = num() * d() ;          // the size of the graph-array. number-of-edges * 2
+//def Int graphArraySize() = num() * d() ;          // the size of the graph-array. number-of-edges * 2
 
-def Int workerSize() = ((num()) / workers()) * d(); // the size of the chunk of the graph-array for each worker
+//def Int workerSize() = ((num()) / workers()) * d(); // the size of the chunk of the graph-array for each worker
 
 def IOVector<IWorker> ws2() = unsafePerformIO(unsafeNew(workers()+1)); // the only mutable shared resource, i.e., the array of workers 
 //TODO it should be replaced
@@ -57,18 +67,18 @@ interface IWorker {
 class Worker(Int workerId, Int size) implements IWorker {
    Int aliveDelegates = 0;
    GenIO g;
-   IOVector<Promise<Int>> arr; // local partition
-   IOVector<Promise<Int>> initArr; // each worker has a copy of initial clique (performance)
+   IOVector<Fut<Int>> arr; // local partition
+   IOVector<Fut<Int>> initArr; // each worker has a copy of initial clique (performance)
     
    {
       // create random seed, this is a heavy hardware operation, but it provides a good random seed
       this.g = createSystemRandom();
 	this.arr = unsafeNew(size + 1); 
-	this.initArr = unsafeNew(kinit+1); 
+	this.initArr = unsafeNew(kinit()+1); 
    }
 
    Unit init_() {
-	Promise<Int> c;
+	Fut<Int> c;
            // START INIT clique of the graph
 	Int index = 1;
 	Int i = 0;                     // i is for the 1st-loop
@@ -96,13 +106,13 @@ class Worker(Int workerId, Int size) implements IWorker {
 
    Unit run_() {
 	Int j = 0;
-	Int i = d + 2 + (workerId - 1);
-	Int temp = kinit + (workerId - 1) * d;
+	Int i = d() + 2 + (workerId - 1);
+	Int temp = kinit() + (workerId - 1) * d;
 	Int source = 0;
 	Int target = 0;
 	Int u = 0;
-	Promise<Int> c;
-	while (i <= num) {
+	Fut<Int> c;
+	while (i <= num()) {
 		j = 1;
 		List<Int> pastDraws = Nil;
 		while (j <= d()) {
@@ -112,7 +122,7 @@ class Worker(Int workerId, Int size) implements IWorker {
 			if (source > temp) { // this is for the coin flipping, it means that you pick from the shadow array
 				source=source-temp;
 				if (source > kinit()){
-					u = (source - 1) / d() + 1;
+					u = div(source - 1,d()) + 1;
 					if (isElem(u,pastDraws)) 
 						j = j - 1;
 					else {
@@ -125,11 +135,11 @@ class Worker(Int workerId, Int size) implements IWorker {
 				else 
 				{            // the picked element is from the shadow-clique array
 					c = unsafeRead(initArr, source);
-					u = c.pro_get;
+					u = c.get;
 					if (u == -1)   // picked an empty element of initial clique
 					       j = j - 1; // so retry
 					else {
-						u = (source - 1) / d() + 1;
+						u = div(source - 1, d()) + 1;
 						if (isElem(u,pastDraws)) j = j - 1;
 						else {
 							pastDraws = Cons(u,pastDraws);
@@ -152,7 +162,7 @@ class Worker(Int workerId, Int size) implements IWorker {
 					aliveDelegates = aliveDelegates + 1;
 				} else {
 					c = unsafeRead(initArr, source);
-					u = c.pro_get;
+					u = c.get;
 					if (u == -1)   // picked an empty element of initial clique
 					       j = j - 1;
 					else if (isElem(u,pastDraws)) 
@@ -167,8 +177,8 @@ class Worker(Int workerId, Int size) implements IWorker {
 		       }
 		       j = j + 1;
 		}
-		i = i + workers;
-		temp = temp + d * workers ;
+		i = i + workers();
+		temp = temp + d() * workers() ;
        }
        // one while loops to wait for all delegates to finish
        await (this.aliveDelegates == 0);
@@ -176,26 +186,26 @@ class Worker(Int workerId, Int size) implements IWorker {
    }
 
     Int request(Int source){ // to return the requested slot of the worker when it is resolved
-	Promise<Int> c;
-	if (source > kinit){
+	Fut<Int> c;
+	if (source > kinit()){
 		Int lSource = localIndex(source);
 		c = unsafeRead(arr, lSource);
-		await c$;
+		await c?;
 	}
 	else
 		c = unsafeRead(initArr, source);
-	Int v = c.pro_get;    
+	Int v = c.get;    
 	return v;
     }
 
     Unit delegate(Fut<Int> ft, Int target) { // if the requested slot belongs to another worker
         await ft?;
         Int u = ft.get;
-	Promise<Int> c;
+	Fut<Int> c;
         // START inlined conflictcheck
 	Bool found = False;
 	if (u != -1) {
-		Int i = ((target - 1)/d()) * d() + 1;
+		Int i = div((target - 1),d()) * d() + 1;
 		Int lCurrentNode = i + d() - 1;
 		Int item = 0;
 		Maybe<Int> maybeElement = Nothing;
@@ -216,7 +226,7 @@ class Worker(Int workerId, Int size) implements IWorker {
 	}
         // END inlined conflictcheck
         if (found || u == -1) { // if conflict happens or it's an -1 from initial clique
-		u = ((target - 1)/d()) * d();
+		u = div((target - 1),d()) * d();
             	u = uniformR(Pair(1,u), this.g);
 		Int aIndex = actorIndex(u);
 		IWorker w = unsafeRead(ws2(), aIndex);
@@ -238,16 +248,16 @@ class Worker(Int workerId, Int size) implements IWorker {
  // START creating the workers
  Int i = 1;
  IWorker w;
- Int size = (num - (d+1)) / workers();
- Int off = num - (d+1) - size * workers();
+ Int size = div(num() - (d()+1),workers());
+ Int off = num() - (d()+1) - size * workers();
  List<IWorker> ws = Nil;
  while (i<=workers()) {
 	if (off >= i)
-     		w = new Worker(i, (size + 1)*d);
+     		w = new Worker(i, (size + 1)*d());
 	else
-		w = new Worker(i, size*d);
+		w = new Worker(i, size*d());
 	ws = Cons(w,ws);
-	unsafeWrite(ws2, i-1, w); 
+	unsafeWrite(ws2(), i-1, w); 
 	i = i + 1;
  }
  // END creating the workers
