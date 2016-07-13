@@ -6,6 +6,11 @@ fimport unsafeNew from Data.Vector.Mutable;
 fimport read from Data.Vector.Mutable;
 fimport write from Data.Vector.Mutable;
 
+// the immutable-array operations
+fimport Vector from Data.Vector;
+fimport fromList from Data.Vector;
+fimport indexM from Data.Vector;
+
 // For generating random numbers
 fimport GenIO from System.Random.MWC;
 fimport createSystemRandom from System.Random.MWC; // creates new non-fixed seed taken from hardware
@@ -31,8 +36,8 @@ fimport rem from Prelude;
 def Int div(Int n, Int d) = quot(n,d);  
 def Int mod(Int n, Int d) = rem(n,d); 
 def TimeSpec diff(TimeSpec a, TimeSpec b) = diffTimeSpec(a,b); 
+def Vector<A> toVector<A>(List<A> l) = fromList(l);
 
- 
 // Parameters to the PA problem
 //////////////////////////
 def Int num() = 1000000;         // the maximum people we want to simulate
@@ -48,12 +53,9 @@ def Bool isElem<A>(A l, List<A> ls) = case ls {
 def Int localIndex(Int index) = div((div(index-1,d())+1 - (d() + 2)),workers())*d() + mod(index-1,d());
 def Int actorIndex(Int index) = mod(div(index-1,d())+1 - (d() + 2), workers());
 
-//TODO it should be replaced
-def IOVector<IWorker> ws2() = unsafePerformIO(unsafeNew(workers())); // the only mutable shared resource, i.e., the array of workers 
-
 interface IWorker {
   Unit run_();
-  Unit init_();
+  Unit init_(List<IWorker> ws);
   Int request(Int source);
 }
 
@@ -62,7 +64,7 @@ class Worker(Int workerId, Int size) implements IWorker {
    GenIO g;
    IOVector<Fut<Int>> arr; // local partition
    IOVector<Fut<Int>> initArr; // each worker has a copy of initial clique (performance)
-    
+   Vector<IWorker> ws2;
    {
     // create random seed, this is a heavy hardware operation, but it provides a good random seed
     this.g = createSystemRandom();
@@ -70,7 +72,8 @@ class Worker(Int workerId, Int size) implements IWorker {
 	  this.initArr = unsafeNew(kinit()+1); 
    }
 
-   Unit init_() {
+   Unit init_(List<IWorker> ws) {
+	   this.ws2 = toVector(ws);
 	   Fut<Int> c;
      // START INIT clique of the graph
 	   Int index = 1;
@@ -148,7 +151,7 @@ class Worker(Int workerId, Int size) implements IWorker {
 				    if (source > kinit()){
 					   Int aIndex = actorIndex(source);
 						
-					   IWorker w = read(ws2(), aIndex);
+					   IWorker w = indexM(ws2, aIndex);
 					   Fut<Int> fp = w!request(source);
 					   this ! delegate(fp, target);
 					   aliveDelegates = aliveDelegates + 1;
@@ -177,14 +180,7 @@ class Worker(Int workerId, Int size) implements IWorker {
      // one while loops to wait for all delegates to finish
      await this.aliveDelegates == 0;
 	i = 0;
-	//while (i < num*d() - kinit())
-	//{
-	//	c = read(arr, i);
-	//	Int ttt = c.get;
-	//	println(toString(ttt));
-	//	i = i+1;
-	//println(toString(i));
-	//}
+
    }
 
    Int request(Int source){ // to return the requested slot of the worker when it is resolved
@@ -232,7 +228,7 @@ class Worker(Int workerId, Int size) implements IWorker {
 		while (u2<= kinit)
 			u2 = uniformR(Pair(1,u), this.g);
 		    Int aIndex = actorIndex(u2);
-		    IWorker w = read(ws2(), aIndex);
+		    IWorker w = indexM(ws2, aIndex);
 		    Fut<Int> fp = w!request(u2);
 		    this.delegate(fp, target);
      }
@@ -250,19 +246,18 @@ class Worker(Int workerId, Int size) implements IWorker {
 {
  
  // START creating the workers
- Int i = 1;
+ Int i = workers();
  IWorker w;
  Int size = div(num() - (d()+1),workers());
  Int off = num() - (d()+1) - size * workers();
  List<IWorker> ws = Nil;
- while (i<=workers()) {
+ while (i>0) {
 	if (off >= i)
     w = new Worker(i, (size + 1)*d());
 	else
 		w = new Worker(i, size*d());
 	ws = Cons(w,ws);
-	write(ws2(), i-1, w); 
-	i = i + 1;
+	i = i - 1;
  }
  // END creating the workers
 
@@ -272,7 +267,7 @@ class Worker(Int workerId, Int size) implements IWorker {
  List<Fut<Unit>> fs = Nil;
  while (ws_ != Nil) {
 	w = head(ws_);
-	ff = w ! init_();
+	ff = w ! init_(ws);
 	fs = Cons(ff,fs);
 	ws_ = tail(ws_);
  }
