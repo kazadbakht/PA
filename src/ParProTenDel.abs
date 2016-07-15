@@ -1,7 +1,6 @@
 module ParProTenDel;
 
-import * from TestPro;
-fimport getNumCapabilities from Control.Concurrent;
+fimport numCapabilities from GHC.Conc;
 fimport unsafePerformIO from System.IO.Unsafe;
 
 // The mutable-array operations
@@ -21,6 +20,12 @@ fimport diffTimeSpec from System.Clock;
 fimport Clock from System.Clock;
 fimport TimeSpec from System.Clock;
 
+fimport quot from Prelude;
+
+// faster integral-only division
+def Int div(Int n, Int d) = quot(n,d);
+
+
 def Bool isElem<A>(A l, List<A> ls) = case ls {
     Nil => False;
     Cons(l_,ls_) => l == l_ || isElem(l,ls_);
@@ -29,7 +34,7 @@ def Bool isElem<A>(A l, List<A> ls) = case ls {
 // this function is just an alias to an imported function, so it can be automatically lifted&used in the imperative world.
 def TimeSpec diff(TimeSpec a, TimeSpec b) = diffTimeSpec(a,b); 
 
-def Int workers() = unsafePerformIO(getNumCapabilities());         // how many workers (threads) running in parallel
+def Int workers() = numCapabilities();         // how many workers (threads) running in parallel
 
 def Int d() = 3;               // the attachment (friendliness) degree
 
@@ -39,9 +44,9 @@ def Int kinit() = d() * (d() + 1); // the given initial clique "social" connecti
 
 def Int graphArraySize() = num() * d() ;          // the size of the graph-array. number-of-edges * 2
 
-def Int workerSize() = ((num()) / workers()) * d(); // the size of the chunk of the graph-array for each worker
+def Int workerSize() = div(num(), workers()) * d(); // the size of the chunk of the graph-array for each worker
 
-def IOVector<Promise<Int>> graphArray() = unsafePerformIO(unsafeNew(graphArraySize()+1));
+def IOVector<Fut<Int>> graphArray() = unsafePerformIO(unsafeNew(graphArraySize()+1));
 
 interface IWorker {
   Unit run_();
@@ -58,7 +63,7 @@ class Worker(Int f, Int l, Int workerId) implements IWorker {
    }
 
    Unit init_() {
-       Promise<Int> c;
+       Fut<Int> c;
 	   if (workerId == 1) {
            // START INIT the full clique of the graph
            Int index = 1;
@@ -77,7 +82,7 @@ class Worker(Int f, Int l, Int workerId) implements IWorker {
            }
            // END INIT the full clique of the graph
            // initialize the rest of the worker-1
-	       index = kinit + 1;
+	       index = kinit() + 1;
 	       while (index <= l) {
 		       c = pro_new;
 		       unsafeWrite(graphArray(), index, c);
@@ -96,14 +101,14 @@ class Worker(Int f, Int l, Int workerId) implements IWorker {
 
    Unit run_() {
        Int j = 0;
-	   Int i = d + 2 + (workerId - 1);
-       Int temp = kinit + (workerId - 1) * d;
+	     Int i = d() + 2 + (workerId - 1);
+       Int temp = kinit() + (workerId - 1) * d;
        Int source = 0;
        Int target = 0;
 	   Int u = 0;
-       Promise<Int> c;
+       Fut<Int> c;
        Maybe<Int> maybeElement = Nothing;
-       while (i <= num) {
+       while (i <= num()) {
            j = 1;
            List<Int> pastDraws = Nil;
            while (j <= d()) {
@@ -113,20 +118,20 @@ class Worker(Int f, Int l, Int workerId) implements IWorker {
 		       if (source > temp) { // this is for the coin flipping, it means that you pick from the shadow array
                    source=source-temp;
 			       if (source > kinit())
-     				   u = (source - 1) / d() + 1;
+     				   u = div((source - 1) , d()) + 1;
 			       else 
 			       {            // the picked element is from the shadow-clique array
 				       c = unsafeRead(graphArray(), source);
-				       u = c.pro_get;
+				       u = c.get;
 				       if (u == -1)   // picked an empty element of initial clique
 					       j = j - 1; // so retry
 				       else
-					       u = (source - 1) / d() + 1;
+					       u = div((source - 1) , d()) + 1;
     	           }
 			   }
 		       else             // here you pick from the real array
 		       {
-			       c = unsafeRead(graphArray, source);
+			       c = unsafeRead(graphArray(), source);
                    maybeElement = c.pro_try;
                    if (isJust(maybeElement)) {
 				       u = fromJust(maybeElement);
@@ -154,25 +159,25 @@ class Worker(Int f, Int l, Int workerId) implements IWorker {
 		       }
 		       j = j + 1;
            }
-	       i = i + workers;
-	       temp = temp + d * workers ;
+	       i = i + workers();
+	       temp = temp + d() * workers() ;
        }
        // one while loops to wait for all delegates to finish
        await (this.aliveDelegates == 0);
 
    }
 
-    Unit delegate(Promise<Int> ft, Int source, Int target) {
-        await ft$;
-        Int u = ft.pro_get;
+    Unit delegate(Fut<Int> ft, Int source, Int target) {
+        await ft?;
+        Int u = ft.get;
         // START inlined conflictcheck
-        Int i = ((target - 1)/d()) * d() + 1;
+        Int i = div((target - 1),d()) * d() + 1;
         Int lCurrentNode = i + d() - 1;
         Int item = 0;
         Bool found = False;
         Maybe<Int> maybeElement = Nothing;
         Int v = 0;
-        Promise<Int> c;
+        Fut<Int> c;
         while (i <= lCurrentNode) {
 	        c = unsafeRead(graphArray(), i);
 	        maybeElement = c.pro_try;
@@ -187,13 +192,13 @@ class Worker(Int f, Int l, Int workerId) implements IWorker {
         }
         // END inlined conflictcheck
         if (found) {
-		    u = ((target - 1)/d()) * d();
-            u = uniformR(Pair(1,u), this.g);
-     	   	c = unsafeRead(graphArray, u);
+		    u = div((target - 1),d()) * d();
+        u = uniformR(Pair(1,u), this.g);
+     	   	c = unsafeRead(graphArray(), u);
            	this.delegate(c, u, target);
         }
         else {
-		    c = unsafeRead(graphArray, target);
+		    c = unsafeRead(graphArray(), target);
 		    c.pro_give(u);
             aliveDelegates = aliveDelegates -1;
         }
@@ -258,8 +263,5 @@ class Worker(Int f, Int l, Int workerId) implements IWorker {
   TimeSpec t3 = diff(t2,t1);    //  compute the difference       (t2 - t1)
 
   println(toString(t3));  
-
-  Test t = new local TestPro();
-  t.test(graphArray(), graphArraySize() - kinit(), kinit() +1, graphArraySize(), d());
 
 }
