@@ -40,7 +40,7 @@ def Vector<A> toVector<A>(List<A> l) = fromList(l);
 
 // Parameters to the PA problem
 //////////////////////////
-def Int num() = 10;         // the maximum people we want to simulate
+def Int num() = 1000000;         // the maximum people we want to simulate
 def Int d() = 3;               // the attachment (friendliness) degree
 def Int kinit() = d() * (d() + 1); // the given initial clique "social" connections (cells, edges*2) (the initial social is a complete graph)
 def Int workers() = numCapabilities();         // how many workers (threads) running in parallel
@@ -109,6 +109,7 @@ class Worker(Int workerId, Int size) implements IWorker {
 	   Int target = 0;
 	   Int u = 0;
 	   Fut<Int> c;
+	Fut<Unit> fd;
 	   while (i <= num()) {
 		    j = 1;
 		    List<Int> pastDraws = Nil;
@@ -154,13 +155,8 @@ class Worker(Int workerId, Int size) implements IWorker {
 					   IWorker w = indexM(ws2, aIndex);
 					   Fut<Int> fp = w!request(source);
              aliveDelegates = aliveDelegates + 1;
-					   if (aliveDelegates == 10) {
-                Fut<Unit> fd = this ! delegate(fp, target);
-                await fd?;
-             }
-             else {
-                   this!delegate(fp, target);
-             }
+					  
+                  fd = this!delegate(fp, target);
 				   } 
            else {
 					   c = read(initArr, source);
@@ -182,6 +178,8 @@ class Worker(Int workerId, Int size) implements IWorker {
 		    } // END second while
 		    i = i + workers();
 		    temp = temp + d() * workers() ;
+		 if (aliveDelegates >= 10)
+                	await fd?;
      } // END first while
      // one while loops to wait for all delegates to finish
      await this.aliveDelegates == 0;
@@ -198,7 +196,7 @@ class Worker(Int workerId, Int size) implements IWorker {
 //			Int index = i * d() + j ;
 //			c = read(arr, index);
 //			u = c.get;
-//			println(toString(u));
+//			//println(toString(u));
 //			if (isElem(u,pastDraws)) 
 //				println(toString(u));
 //			else 
