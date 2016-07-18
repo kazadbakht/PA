@@ -40,7 +40,7 @@ def Vector<A> toVector<A>(List<A> l) = fromList(l);
 
 // Parameters to the PA problem
 //////////////////////////
-def Int num() = 1000000;         // the maximum people we want to simulate
+def Int num() = 100000;         // the maximum people we want to simulate
 def Int d() = 3;               // the attachment (friendliness) degree
 def Int kinit() = d() * (d() + 1); // the given initial clique "social" connections (cells, edges*2) (the initial social is a complete graph)
 def Int workers() = numCapabilities();         // how many workers (threads) running in parallel
@@ -108,8 +108,7 @@ class Worker(Int workerId, Int size) implements IWorker {
 	   Int source = 0;
 	   Int target = 0;
 	   Int u = 0;
-	   Fut<Int> c;
-	Fut<Unit> fd;
+	   Fut<Unit> fd;
 	   while (i <= num()) {
 		    j = 1;
 		    List<Int> pastDraws = Nil;
@@ -125,14 +124,11 @@ class Worker(Int workerId, Int size) implements IWorker {
 						      j = j - 1;
 					     else {
 						    pastDraws = Cons(u,pastDraws);
-						    Int lTarget = localIndex(target);
-						    c = read(arr, lTarget);
-						    c.pro_give(u);
+						    read(arr, localIndex(target)).pro_give(u);
 					     }
 				      }  
 				      else {            // the picked element is from the shadow-clique array
-					     c = read(initArr, source);
-					     u = c.get;
+					     u = read(initArr, source).get;
 					     if (u == -1)   // picked an empty element of initial clique
 					       j = j - 1; // so retry
 					     else {
@@ -140,27 +136,20 @@ class Worker(Int workerId, Int size) implements IWorker {
 						     if (isElem(u,pastDraws)) j = j - 1;
 						     else {
 							    pastDraws = Cons(u,pastDraws);
-							    Int lTarget = localIndex(target);
-							    //println(toString(lTarget));
-							    c = read(arr, lTarget);
-							    c.pro_give(u);
+							    read(arr, localIndex(target)).pro_give(u);
 						     }					
 					     }
 				      } 
 			     }
 			     else {             // here you pick from the real array
 				    if (source > kinit()){
-					   Int aIndex = actorIndex(source);
-						
-					   IWorker w = indexM(ws2, aIndex);
+					   IWorker w = indexM(ws2, actorIndex(source));
 					   Fut<Int> fp = w!request(source);
-             aliveDelegates = aliveDelegates + 1;
-					  
-                  fd = this!delegate(fp, target);
+             aliveDelegates = aliveDelegates + 1;					  
+             fd = this!delegate(fp, target);
 				   } 
            else {
-					   c = read(initArr, source);
-					   u = c.get;
+					   u = read(initArr, source).get;
 					   if (u == -1)   // picked an empty element of initial clique
 					         j = j - 1;
 					   else 
@@ -168,9 +157,7 @@ class Worker(Int workerId, Int size) implements IWorker {
 						      j = j - 1;
 					    else {
 						    pastDraws = Cons(u,pastDraws);
-						    Int lTarget = localIndex(target);
-						    c = read(arr, lTarget);
-						    c.pro_give(u);
+						    read(arr, localIndex(target)).pro_give(u);
 					    }					
 				    }	
 		       }
@@ -178,8 +165,7 @@ class Worker(Int workerId, Int size) implements IWorker {
 		    } // END second while
 		    i = i + workers();
 		    temp = temp + d() * workers() ;
-		 if (aliveDelegates >= 10)
-                	await fd?;
+		 if (aliveDelegates >= 10) await fd?; // or await (aliveDelegates < 10);
      } // END first while
      // one while loops to wait for all delegates to finish
      await this.aliveDelegates == 0;
@@ -211,8 +197,7 @@ class Worker(Int workerId, Int size) implements IWorker {
    Int request(Int source){ // to return the requested slot of the worker when it is resolved
 	   Fut<Int> c;
 	   if (source > kinit()){
-		    Int lSource = localIndex(source);
-		    c = read(arr, lSource);
+		    c = read(arr, localIndex(source));
 		    await c?;
 	   }
 	   else
@@ -230,37 +215,29 @@ class Worker(Int workerId, Int size) implements IWorker {
 	    if (u != -1) {
 		    Int i = div((target - 1),d()) * d() + 1;
 		    Int lCurrentNode = i + d() - 1;
-		    Int item = 0;
 		    Maybe<Int> maybeElement = Nothing;
-		    Int v = 0;
 		    while (i <= lCurrentNode) {
-			     Int li = localIndex(i);
-			     c = read(arr, li);
-			     maybeElement = c.pro_try;
-			     if (isJust(maybeElement)) {
-				      v = fromJust(maybeElement);
-				      if (u == v) {
-					     found = True;
-					     i = lCurrentNode + 1; //just to break the while
-				      }
-			     }
-			     i = i + 1;
+			     maybeElement = read(arr, localIndex(i)).pro_try;
+			     case maybeElement {
+            Just(v) => { if (u == v) {
+                          found = True;
+                          i = lCurrentNode + 1; //just to break the while
+                         }
+                       }
+            _ => skip;
+           }
+           i = i + 1;
 		    }
 	   } // END inlined conflictcheck
      if (found || u == -1) { // if conflict happens or it's an -1 from initial clique
-		u = div((target - 1),d()) * d();
-        	Int u2 = 0;
-		while (u2<= kinit)
-			u2 = uniformR(Pair(1,u), this.g);
-		    Int aIndex = actorIndex(u2);
-		    IWorker w = indexM(ws2, aIndex);
+		    u = div((target - 1),d()) * d();
+		    Int u2 = uniformR(Pair(kinit()+1,u), this.g);
+		    IWorker w = indexM(ws2, actorIndex(u2));
 		    Fut<Int> fp = w!request(u2);
 		    this.delegate(fp, target);
      }
      else { // the slot is resolved
-		    Int lTarget = localIndex(target);
-		    c = read(arr, lTarget);
-		    c.pro_give(u);
+		    read(arr, localIndex(target)).pro_give(u);
 		    aliveDelegates = aliveDelegates -1;
      }
   }
@@ -298,8 +275,7 @@ class Worker(Int workerId, Int size) implements IWorker {
  }
  // wait for workers to finish initialize
  while (fs != Nil) {
-     ff = head(fs);
-	   ff.get;
+     head(fs).get;
      fs = tail(fs);
  }
  //End parallel initialization of the array by workers
@@ -316,8 +292,7 @@ class Worker(Int workerId, Int size) implements IWorker {
  }
  // wait for workers to finish run
  while (fs != Nil) {
-     ff = head(fs);
-	   ff.get;
+     head(fs).get;
      fs = tail(fs);
  }
  println(toString(diff(getTime(Monotonic),t1))); //  print the difference (NOW - t1)
