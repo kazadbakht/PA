@@ -159,8 +159,8 @@ class Worker(Int workerId, Int size) implements IWorker {
 			     }
 			     else {             // here you pick from the real array
 				    if (source > kinit()){
-					Int aIndex = actorIndex(source);
-					if (aIndex == this.workerId){
+					Int aIndex = actorIndex(source);							
+					if (aIndex == this.workerId-1){
 						Fut<Int> fp = read(arr, localIndex(source));
        						maybeElement = fp.pro_try;
 						if (isJust(maybeElement))
@@ -181,7 +181,8 @@ class Worker(Int workerId, Int size) implements IWorker {
 						}
 					}
 					else
-					   {IWorker w = indexM(ws2, aIndex);
+					   {
+					IWorker w = indexM(ws2, aIndex);
 					   Fut<Int> fp = w!request(source);
              				   aliveDelegates = aliveDelegates + 1;					  
              				   fd = this!delegate(fp, target);
