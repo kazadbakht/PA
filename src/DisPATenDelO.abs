@@ -161,31 +161,28 @@ class Worker(Int workerId, Int size) implements IWorker {
 				    if (source > kinit()){
 					Int aIndex = actorIndex(source);							
 					if (aIndex == this.workerId-1){
-						Fut<Int> fp = read(arr, localIndex(source));
-       						maybeElement = fp.pro_try;
-						if (isJust(maybeElement))
-						{
-							u = fromJust(maybeElement);
-							if (isElem(u,pastDraws)) 
-						     		j = j - 1;
-					   		else {
-						    		pastDraws = Cons(u,pastDraws);
+                        Fut<Int> fp = read(arr, localIndex(source));
+       					maybeElement = fp.pro_try;
+						case maybeElement {
+                          Just(v) => {
+							  if (isElem(v,pastDraws)) j = j - 1;
+        				   	  else {
+						    		pastDraws = Cons(v,pastDraws);
 						    		read(arr, localIndex(target)).pro_give(u);
 					    		}
-							
-						}	
-						else
-						{
-							aliveDelegates = aliveDelegates + 1;					  
-             						fd = this!delegate(fp, target);						
-						}
-					}
+                              }
+                          _ =>	{
+							      aliveDelegates = aliveDelegates + 1;					  
+                    			  fd = this!delegate(fp, target);						
+					     	    }
+					   }
+                    }
 					else
 					   {
-					IWorker w = indexM(ws2, aIndex);
-					   Fut<Int> fp = w!request(source);
-             				   aliveDelegates = aliveDelegates + 1;					  
-             				   fd = this!delegate(fp, target);
+					     IWorker w = indexM(ws2, aIndex);
+					     Fut<Int> fp = w!request(source);
+             			 aliveDelegates = aliveDelegates + 1;					  
+             			 fd = this!delegate(fp, target);
 					   }
 				   } 
            else {
