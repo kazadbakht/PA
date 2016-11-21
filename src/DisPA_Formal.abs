@@ -155,10 +155,10 @@ class Worker(Int workerId, Int size) implements IWorker {
 							    pastDraws = Cons(u,pastDraws);
 							    Int lTarget = localIndex(target);
 							    //println(toString(lTarget));
-						println(toString(1222));
-						    arrr = writenth(arrr, lTarget, u, Nil);
-						println(toString(222));
-						     }					
+							    println(toString(1222));
+							    arrr = writenth(arrr, lTarget, u, Nil);
+							    println(toString(222));
+						     }
 					     }
 				      } 
 			     }
@@ -170,24 +170,24 @@ class Worker(Int workerId, Int size) implements IWorker {
 					   Fut<Int> fp = w!request(source);
 					   this ! delegate(fp, target);
 					   aliveDelegates = aliveDelegates + 1;
-				   } 
-           else {
-						println(toString(1333));
+				    } 
+				    else {
+					   println(toString(1333));
 					   u = nth(initArrr, source);
-						println(toString(333));
+					   println(toString(333));
 					   if (u == -1)   // picked an empty element of initial clique
 					         j = j - 1;
 					   else 
-              if (isElem(u,pastDraws)) 
-						      j = j - 1;
-					    else {
+					   if (isElem(u,pastDraws)) 
+					        j = j - 1;
+					   else {
 						    pastDraws = Cons(u,pastDraws);
 						    Int lTarget = localIndex(target);
-						println(toString(144));
+						    println(toString(144));
 						    arrr = writenth(arrr, lTarget, u, Nil);
-						println(toString(444));
-					    }
-				    }	
+						    println(toString(444));
+					   }
+				    }
 		       }
 		       j = j + 1;
 		    } // END second while

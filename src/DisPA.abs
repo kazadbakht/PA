@@ -40,7 +40,7 @@ def Vector<A> toVector<A>(List<A> l) = fromList(l);
 
 // Parameters to the PA problem
 //////////////////////////
-def Int num() = 10000;         // the maximum people we want to simulate
+def Int num() = 100000;         // the maximum people we want to simulate
 def Int d() = 3;               // the attachment (friendliness) degree
 def Int kinit() = d() * (d() + 1); // the given initial clique "social" connections (cells, edges*2) (the initial social is a complete graph)
 def Int workers() = numCapabilities();         // how many workers (threads) running in parallel
@@ -204,7 +204,7 @@ class Worker(Int workerId, Int size) implements IWorker {
 //		i = i + 1;
 //	}
 
-//   }
+   }
 
    Int request(Int source){ // to return the requested slot of the worker when it is resolved
 	   Fut<Int> c;

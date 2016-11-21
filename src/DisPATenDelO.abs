@@ -1,3 +1,5 @@
+// This DisPA (Distributed PA) TenDel (every ten delegates it releases the control) O (optimization where the dependency is resolved locally for the local dependencies) 
+
 module DisPATenDelO;
 
 // The mutable-array operations
@@ -153,50 +155,50 @@ class Worker(Int workerId, Int size) implements IWorker {
 						     else {
 							    pastDraws = Cons(u,pastDraws);
 							    read(arr, localIndex(target)).pro_give(u);
-						     }					
+						     }
 					     }
 				      } 
 			     }
 			     else {             // here you pick from the real array
 				    if (source > kinit()){
-					Int aIndex = actorIndex(source);							
+					Int aIndex = actorIndex(source);
 					if (aIndex == this.workerId-1){
-                        Fut<Int> fp = read(arr, localIndex(source));
+					Fut<Int> fp = read(arr, localIndex(source));
        					maybeElement = fp.pro_try;
 						case maybeElement {
-                          Just(v) => {
-							  if (isElem(v,pastDraws)) j = j - 1;
-        				   	  else {
-						    		pastDraws = Cons(v,pastDraws);
-						    		read(arr, localIndex(target)).pro_give(u);
-					    		}
-                              }
-                          _ =>	{
-							      aliveDelegates = aliveDelegates + 1;					  
-                    			  fd = this!delegate(fp, target);						
-					     	    }
-					   }
-                    }
+							Just(v) => {
+								if (isElem(v,pastDraws)) j = j - 1;
+								else {
+									pastDraws = Cons(v,pastDraws);
+									read(arr, localIndex(target)).pro_give(u);
+								}
+							}
+							_ =>	{
+								aliveDelegates = aliveDelegates + 1;
+								fd = this!delegate(fp, target);
+							}
+						}
+					}
 					else
-					   {
+					{
 					     IWorker w = indexM(ws2, aIndex);
 					     Fut<Int> fp = w!request(source);
-             			 aliveDelegates = aliveDelegates + 1;					  
-             			 fd = this!delegate(fp, target);
-					   }
+					     aliveDelegates = aliveDelegates + 1;
+					     fd = this!delegate(fp, target);
+					}
 				   } 
-           else {
+				   else {
 					   u = read(initArr, source).get;
 					   if (u == -1)   // picked an empty element of initial clique
-					         j = j - 1;
+						j = j - 1;
 					   else 
-              if (isElem(u,pastDraws)) 
-						      j = j - 1;
-					    else {
-						    pastDraws = Cons(u,pastDraws);
-						    read(arr, localIndex(target)).pro_give(u);
-					    }					
-				    }	
+					   if (isElem(u,pastDraws)) 
+						j = j - 1;
+					   else {
+						pastDraws = Cons(u,pastDraws);
+						read(arr, localIndex(target)).pro_give(u);
+					   }
+				   }
 		       }
 		       j = j + 1;
 		    } // END second while

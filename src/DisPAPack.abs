@@ -70,6 +70,7 @@ class Worker(Int workerId, Int size) implements IWorker {
    Vector<IWorker> ws2;
    Vector<List<List<Int>>> srcs;
    Vector<List<List<Int>>> tgts;
+   Bool b;
    {
     // create random seed, this is a heavy hardware operation, but it provides a good random seed
     this.g = createSystemRandom();
@@ -77,7 +78,7 @@ class Worker(Int workerId, Int size) implements IWorker {
 	  this.initArr = unsafeNew(kinit()+1); 
 	  this.srcs = unsafeNew(workerId);
 	  this.tgts = unsafeNew(workerId);
-	  Bool b = False;
+	  this.b = False;
    }
 
    Unit init_(List<IWorker> ws) {

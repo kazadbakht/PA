@@ -40,7 +40,7 @@ def Vector<A> toVector<A>(List<A> l) = fromList(l);
 
 // Parameters to the PA problem
 //////////////////////////
-def Int num() = 100000;         // the maximum people we want to simulate
+def Int num() = 1000000;         // the maximum people we want to simulate
 def Int d() = 3;               // the attachment (friendliness) degree
 def Int kinit() = d() * (d() + 1); // the given initial clique "social" connections (cells, edges*2) (the initial social is a complete graph)
 def Int workers() = numCapabilities();         // how many workers (threads) running in parallel
@@ -143,23 +143,23 @@ class Worker(Int workerId, Int size) implements IWorker {
 			     }
 			     else {             // here you pick from the real array
 				    if (source > kinit()){
-					   IWorker w = indexM(ws2, actorIndex(source));
-					   Fut<Int> fp = w!request(source);
-             aliveDelegates = aliveDelegates + 1;					  
-             fd = this!delegate(fp, target);
-				   } 
-           else {
+					IWorker w = indexM(ws2, actorIndex(source));
+					Fut<Int> fp = w!request(source);
+					aliveDelegates = aliveDelegates + 1;					  
+					fd = this!delegate(fp, target);
+				    } 
+				    else {
 					   u = read(initArr, source).get;
 					   if (u == -1)   // picked an empty element of initial clique
 					         j = j - 1;
 					   else 
-              if (isElem(u,pastDraws)) 
-						      j = j - 1;
-					    else {
+					   if (isElem(u,pastDraws)) 
+					         j = j - 1;
+					   else {
 						    pastDraws = Cons(u,pastDraws);
 						    read(arr, localIndex(target)).pro_give(u);
-					    }					
-				    }	
+					   }
+				    }
 		       }
 		       j = j + 1;
 		    } // END second while
@@ -321,7 +321,7 @@ class Worker(Int workerId, Int size) implements IWorker {
 //	{
 //		Int x = read(arr, v);
 //		x = x + 1;
-//		write(arr, v, x);	
+//		write(arr, v, x);
 //	}
 //	index = index + 1;
 //  }
@@ -340,7 +340,7 @@ class Worker(Int workerId, Int size) implements IWorker {
 //		}
 //		j=j+1;
 //	}
-//	println(toString(counter));	
+//	println(toString(counter));
 //  }
 //END of getting frequency of the degrees 
 
