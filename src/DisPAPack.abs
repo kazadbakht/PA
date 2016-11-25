@@ -70,7 +70,7 @@ class Worker(Int workerId, Int size) implements IWorker {
    Vector<IWorker> ws2;
    Vector<List<List<Int>>> srcs;
    Vector<List<List<Int>>> tgts;
-   Bool b;
+   Bool b = False;
    {
     // create random seed, this is a heavy hardware operation, but it provides a good random seed
     this.g = createSystemRandom();
@@ -131,8 +131,8 @@ class Worker(Int workerId, Int size) implements IWorker {
 	   Int u = 0;
 	   Fut<Unit> fd;
 	   Maybe<Int> maybeElement = Nothing;
-	   List<Fut<List<Int>>> fsrcs;
-	   List<List<Int>> ltgts;
+	   List<Fut<List<Int>>> fsrcs = Nil;
+	   List<List<Int>> ltgts = Nil;
 	   while (i <= num()) {
 		    j = 1;
 		    List<Int> pastDraws = Nil;
@@ -228,6 +228,7 @@ class Worker(Int workerId, Int size) implements IWorker {
 		if (aliveDelegates >= 10)
 		if (b ==True) {
 			i = 0;
+      Fut<List<Int>> fsrc;
 			while (i< workerId - 1)
 			{
 				List<Int> tmp = read(srcs, workerId-2-i);
@@ -330,7 +331,7 @@ class Worker(Int workerId, Int size) implements IWorker {
       List<Int> tgt = head(tgts);
       tgts = tail(tgts);
 	    Fut<Int> c;
-        
+      Int u = 0;  
       // START inlined conflictcheck
       while (src != Nil){
 	    Int target = head(tgt);

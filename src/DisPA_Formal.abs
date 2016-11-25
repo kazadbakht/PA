@@ -224,7 +224,7 @@ class Worker(Int workerId, Int size) implements IWorker {
    }
 
    Int request(Int source){ // to return the requested slot of the worker when it is resolved
-	   Int i;
+	   Int i = 0;
 	   if (source > kinit()){
 		    Int lSource = localIndex(source);
 		    await nth(arrr, lSource) != 0;
