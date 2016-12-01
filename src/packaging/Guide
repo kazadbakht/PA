@@ -1,0 +1,9 @@
+DisPA => DisPA_RR		runnable on habs
+DisPA_Formal_RR 		runnable on habs - not efficient arr and initArr are lists.
+DisPA_Formal_RR2		not runnable on habs - pure abs div and mod are problematic
+DisPA_Formal_CP 		runnable on habs 
+DisPAck_RR			runnable on habs - more efficient since it uses arrays. but communications are still based on lists
+
+all above can cause deadlock for ps > 1. However:
+ 
+DisPAck_explicit		runnable on habs - Deadlock-free for ps > 1 - ecxpected to be more efficient than DisPAck_RR

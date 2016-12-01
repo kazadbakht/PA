@@ -1,49 +1,23 @@
 module DisPA_Formal;
 
-// The mutable-array operations
-fimport IOVector from Data.Vector.Mutable;
-fimport unsafeNew from Data.Vector.Mutable;
-fimport read from Data.Vector.Mutable;
-fimport write from Data.Vector.Mutable;
-
-// the immutable-array operations
-fimport Vector from Data.Vector;
-fimport fromList from Data.Vector;
-fimport indexM from Data.Vector;
-
 // For generating random numbers
 fimport GenIO from System.Random.MWC;
 fimport createSystemRandom from System.Random.MWC; // creates new non-fixed seed taken from hardware
-fimport uniformR from System.Random.MWC;           
-
-// For measuring execution time
-fimport getTime from System.Clock;
-fimport diffTimeSpec from System.Clock;
-fimport Clock from System.Clock;
-fimport TimeSpec from System.Clock;
-
-// how many CPU cores is given to the runtime system with +RTS -N
-fimport numCapabilities from GHC.Conc;
-
-//TODO: to be removed, it is used for a global table of workers
-fimport unsafePerformIO from System.IO.Unsafe;
+fimport uniformR from System.Random.MWC;
 
 // for faster integral division/modulo
 fimport quot from Prelude; 
 fimport rem from Prelude; 
 
-// these aliases are needed because foreign code is pure but used also as impure 
 def Int div(Int n, Int d) = quot(n,d);  
 def Int mod(Int n, Int d) = rem(n,d); 
-def TimeSpec diff(TimeSpec a, TimeSpec b) = diffTimeSpec(a,b); 
-def Vector<A> toVector<A>(List<A> l) = fromList(l);
 
 // Parameters to the PA problem
 //////////////////////////
 def Int num() = 100;         // the maximum people we want to simulate
 def Int d() = 3;               // the attachment (friendliness) degree
 def Int kinit() = d() * (d() + 1); // the given initial clique "social" connections (cells, edges*2) (the initial social is a complete graph)
-def Int workers() = numCapabilities();         // how many workers (threads) running in parallel
+def Int workers() = 4;         // how many workers (threads) running in parallel
 
 // Utility functions
 def Bool isElem<A>(A l, List<A> ls) = case ls {
@@ -68,25 +42,19 @@ interface IWorker {
 
 class Worker(Int workerId, Int size) implements IWorker {
    Int aliveDelegates = 0;
-   GenIO g;
    List<Int> arrr = Nil;
    List<Int> initArrr = Nil;
-   Vector<IWorker> ws2;
+   List<IWorker> ws2 = Nil;
+   GenIO g;
    {
     // create random seed, this is a heavy hardware operation, but it provides a good random seed
     this.g = createSystemRandom();
- 	  this.arr = unsafeNew(size + 1); 
-	  this.initArr = unsafeNew(kinit()+1); 
    }
-
    Unit init_(List<IWorker> ws) {
-	   this.ws2 = toVector(ws);
+	   this.ws2 = ws;
 	   arrr = Cons(0, Nil);
 	   initArrr = Cons(0, Nil);
-	//c = nth(arrr, 1);
-	//arrr = writenth(arrr, c, 0);
-	//Int asas = c.get;
-	//println(toString(asas));
+
      // START INIT clique of the graph
 	   Int index = 1;
 	   Int i = 0;                     // i is for the 1st-loop
@@ -103,45 +71,42 @@ class Worker(Int workerId, Int size) implements IWorker {
 		  }
 	    i = i + 1;
 	   }
-	  println(toString(length(initArrr)));
+
 	   // END INIT the full clique of the graph
+
      // initialize the partition
 	   index = 1;
 	   while (index <= size) {
 	       arrr = appendright(arrr, 0);
 	       index = index + 1;
 	   }
-	  println(toString(length(arrr)));
    }
 
    Unit run_() {
 	   Int j = 0;
 	   Int i = d() + 2 + (workerId - 1);
-	   Int temp = kinit() + (workerId - 1) * d;
+	   Int temp = kinit() + (workerId - 1) * d();
 	   Int source = 0;
 	   Int target = 0;
 	   Int u = 0;
 	   while (i <= num()) {
-		    println("Done3");
 		    j = 1;
 		    List<Int> pastDraws = Nil;
 		    while (j <= d()) {
+			     //source = uniformR(Pair(1,temp*2), this.g);
 			     source = uniformR(Pair(1,temp*2), this.g);
 			     target = temp + j;
 			     u = 0;				
 			     if (source > temp) { // this is for the coin flipping, it means that you pick from the shadow array
-						    println("Done4");
 				      source=source-temp;
 				      if (source > kinit()){
 					     u = div(source - 1,d()) + 1;
 					     if (isElem(u,pastDraws)) 
-						      j = j - 1;
+						    j = j - 1;
 					     else {
 						    pastDraws = Cons(u,pastDraws);
 						    Int lTarget = localIndex(target);
-						println(toString(1111));
 						    arrr = writenth(arrr, lTarget, u, Nil);
-						println(toString(111));
 					     }
 				      }  
 				      else {            // the picked element is from the shadow-clique array
@@ -155,26 +120,21 @@ class Worker(Int workerId, Int size) implements IWorker {
 							    pastDraws = Cons(u,pastDraws);
 							    Int lTarget = localIndex(target);
 							    //println(toString(lTarget));
-							    println(toString(1222));
 							    arrr = writenth(arrr, lTarget, u, Nil);
-							    println(toString(222));
 						     }
 					     }
 				      } 
 			     }
 			     else {             // here you pick from the real array
-				    println("Done5");
 				    if (source > kinit()){
 					   Int aIndex = actorIndex(source);
-					   IWorker w = indexM(ws2, aIndex);
+					   IWorker w = nth(ws2, aIndex);
 					   Fut<Int> fp = w!request(source);
 					   this ! delegate(fp, target);
 					   aliveDelegates = aliveDelegates + 1;
-				    } 
+				    }
 				    else {
-					   println(toString(1333));
 					   u = nth(initArrr, source);
-					   println(toString(333));
 					   if (u == -1)   // picked an empty element of initial clique
 					         j = j - 1;
 					   else 
@@ -183,9 +143,7 @@ class Worker(Int workerId, Int size) implements IWorker {
 					   else {
 						    pastDraws = Cons(u,pastDraws);
 						    Int lTarget = localIndex(target);
-						    println(toString(144));
 						    arrr = writenth(arrr, lTarget, u, Nil);
-						    println(toString(444));
 					   }
 				    }
 		       }
@@ -198,33 +156,32 @@ class Worker(Int workerId, Int size) implements IWorker {
      await this.aliveDelegates == 0;
 
 // For testing
-//	i = 0;
-//	j = 0;
-//	while (i<=div(size, d())-1)
-//	{
-//		List<Int> pastDraws = Nil;
-//		j = 0;
-//		while (j<=d()-1)
-//		{
-//			Int index = i * d() + j ;
-//			c = read(arr, index);
-//			u = c.get;
-//			//println(toString(u));
-//			if (isElem(u,pastDraws)) 
-//				println(toString(u));
-//			if (u == 0) 
-//				println(toString(u));
-//			else 
-//				pastDraws = Cons(u,pastDraws);
-//			j = j + 1;
-//		} 
-//		i = i + 1;
-//	}
+	i = 0;
+	j = 0;
+	while (i<=div(size, d())-1)
+	{
+		List<Int> pastDraws = Nil;
+		j = 0;
+		while (j<=d()-1)
+		{
+			Int index = i * d() + j ;
+			u = nth(arrr, index);
+			//println(toString(u));
+			if (isElem(u,pastDraws)) 
+				println(toString(u));
+			if (u == 0) 
+				println(toString(u));
+			else 
+				pastDraws = Cons(u,pastDraws);
+			j = j + 1;
+		} 
+		i = i + 1;
+	}
 
    }
 
    Int request(Int source){ // to return the requested slot of the worker when it is resolved
-	   Int i;
+	   Int i = 0;
 	   if (source > kinit()){
 		    Int lSource = localIndex(source);
 		    await nth(arrr, lSource) != 0;
@@ -260,10 +217,11 @@ class Worker(Int workerId, Int size) implements IWorker {
      if (found || u == -1) { // if conflict happens or it's an -1 from initial clique
 		u = div((target - 1),d()) * d();
         	Int u2 = 0;
-		while (u2<= kinit)
+		while (u2<= kinit())
+			//u2 = uniformR(Pair(1,u), this.g);
 			u2 = uniformR(Pair(1,u), this.g);
 		    Int aIndex = actorIndex(u2);
-		    IWorker w = indexM(ws2, aIndex);
+		    IWorker w = nth(ws2, aIndex);
 		    Fut<Int> fp = w!request(u2);
 		    this.delegate(fp, target);
      }
@@ -316,7 +274,6 @@ class Worker(Int workerId, Int size) implements IWorker {
  
  // START RUNNING
  println("START RUNNING");
- TimeSpec t1 = getTime(Monotonic);
  while (ws != Nil) {
      w = head(ws);
 	   ff = w ! run_();  // run each worker
@@ -329,7 +286,6 @@ class Worker(Int workerId, Int size) implements IWorker {
 	   ff.get;
      fs = tail(fs);
  }
- println(toString(diff(getTime(Monotonic),t1))); //  print the difference (NOW - t1)
 
 //BEGIN of getting frequency of the degrees   
 //  Int index = 1;
@@ -380,5 +336,4 @@ class Worker(Int workerId, Int size) implements IWorker {
 
  //Test t = new local TestPro();
  //t.test(graphArray(), graphArraySize() - kinit(), kinit() +1, graphArraySize(), d());
-
 }

@@ -1,0 +1,400 @@
+// A RR version of DisPack where random, div, and mod are NOT part of pure abs
+
+module DisPAck_Formal_RR;
+
+// For generating random numbers
+fimport GenIO from System.Random.MWC;
+fimport createSystemRandom from System.Random.MWC; // creates new non-fixed seed taken from hardware
+fimport uniformR from System.Random.MWC;
+
+// for faster integral division/modulo
+fimport quot from Prelude; 
+fimport rem from Prelude; 
+
+// these aliases are needed because foreign code is pure but used also as impure 
+def Int div(Int n, Int d) = quot(n,d);  
+def Int mod(Int n, Int d) = rem(n,d); 
+
+
+// Parameters to the PA problem
+//////////////////////////
+def Int num() = 100;         // the maximum people we want to simulate
+def Int d() = 10;               // the attachment (friendliness) degree
+def Int kinit() = d() * (d() + 1); // the given initial clique "social" connections (cells, edges*2) (the initial social is a complete graph)
+def Int workers() = 4;         // how many workers (threads) running in parallel
+def Int packSize() = 1;
+
+// Utility functions
+def Bool isElem<A>(A l, List<A> ls) = case ls {
+    Nil => False;
+    Cons(l_,ls_) => l == l_ || isElem(l,ls_);
+};
+def Int localIndex(Int index) = div((div(index-1,d())+1 - (d() + 2)),workers())*d() + mod(index-1,d());
+def Int actorIndex(Int index) = mod(div(index-1,d())+1 - (d() + 2), workers());
+
+
+def List<A> writenth<A>(List<A> l, Int n, A v, List<A> l0) =
+	case n {
+		0 => concatenate(reverse(l0), Cons(v, tail(l)));
+		_ => writenth(tail(l), n-1, v, Cons(head(l), l0));
+	};
+
+interface IWorker {
+  Unit run_();
+  Unit init_(List<IWorker> ws);
+  Int request(Int source);
+  List<Int> requests(List<Int> src);
+}
+
+class Worker(Int workerId, Int size) implements IWorker {
+   Int aliveDelegates = 0;
+   List<Int> arrr = Nil;
+   List<Int> initArrr = Nil;
+   List<IWorker> ws2 = Nil;
+   List<List<Int>> srcs = Nil;
+   List<List<Int>> tgts = Nil;
+   Int thisTime = 0;
+
+   Unit init_(List<IWorker> ws) {
+	   this.ws2 = ws;
+	   arrr = Cons(0, Nil);
+	   initArrr = Cons(0, Nil);
+     // START INIT clique of the graph
+
+
+	   Int index = 1;
+	   Int i = 0;                     // i is for the 1st-loop
+	   Int j = 0;                     // j is for the 2nd-loop
+	   while (i <= d()) {
+		  j = 1;
+		  while (j <= d()) {
+		       index = j + (i * d());
+		       if (j <= i)
+	 		       initArrr = appendright(initArrr, j); 
+			else
+	 		       initArrr = appendright(initArrr, -1);
+		       j = j + 1;
+		  }
+	    i = i + 1;
+	   }
+
+	   // END INIT the full clique of the graph
+
+     // initialize the partition
+	   index = 1;
+	   while (index <= size) {
+	       arrr = appendright(arrr, 0);
+	       index = index + 1;
+	   }
+   }
+
+   Unit run_() {
+	   Int j = 0;
+	   Int i = d() + 2 + (workerId - 1);
+	   Int temp = kinit() + (workerId - 1) * d;
+	   Int source = 0;
+	   Int target = 0;
+	   Int u = 0;
+	   Fut<Unit> fd;
+ 	   List<Fut<List<Int>>> fsrcs=Nil;
+	   List<List<Int>> ltgts=Nil;
+	   Int t = 0;
+	   List<Int> lNil = Nil;
+	   GenIO g = createSystemRandom();
+	   while (t < workers()) { 
+	   	srcs = Cons(lNil, srcs); 
+	   	tgts = Cons(lNil, tgts); 
+	   	t = t + 1;
+	   }
+	   while (i <= num()) {
+		    j = 1;
+		    List<Int> pastDraws = Nil;
+		    while (j <= d()) {
+			     source = uniformR(Pair(1,temp*2), g);//random(temp*2) + 1;
+			     target = temp + j;
+			     u = 0;				
+			     if (source > temp) { // this is for the coin flipping, it means that you pick from the shadow array
+				      source=source-temp;
+				      if (source > kinit()){
+					     u = div(source - 1,d()) + 1;
+					     if (isElem(u,pastDraws)) 
+						      j = j - 1;
+					     else {
+						    pastDraws = Cons(u,pastDraws);
+						    arrr = writenth(arrr, localIndex(target), u, Nil);
+					     }
+				      }  
+				      else {            // the picked element is from the shadow-clique array
+					     u = nth(initArrr, source);
+					     if (u == -1)   // picked an empty element of initial clique
+					       j = j - 1; // so retry
+					     else {
+						     u = div(source - 1, d()) + 1;
+						     if (isElem(u,pastDraws)) j = j - 1;
+						     else {
+							    pastDraws = Cons(u,pastDraws);
+							    arrr = writenth(arrr, localIndex(target), u, Nil);
+						     }
+					     }
+				      } 
+			     }
+			     else {             // here you pick from the real array
+				    if (source > kinit()){
+					Int aIndex = actorIndex(source);
+					List<Int> tgt = nth(tgts, aIndex);
+					List<Int> src = nth(srcs, aIndex);
+					src = appendright(src, source);
+					tgt = appendright(tgt, target);
+					tgts = writenth(tgts, aIndex, tgt, Nil);
+					srcs = writenth(srcs, aIndex, src, Nil);
+					aliveDelegates = aliveDelegates + 1;
+					thisTime = thisTime+1; 
+				    }
+				    else {
+					u = nth(initArrr, source);
+					if (u == -1)   // picked an empty element of initial clique
+						j = j - 1;
+					else if (isElem(u,pastDraws)) 
+						j = j - 1;
+					else {
+						pastDraws = Cons(u,pastDraws);
+						arrr = writenth(arrr, localIndex(target), u, Nil);
+					}
+				    }
+		       }
+		       j = j + 1;
+		    } // END second while
+		    i = i + workers();
+		    temp = temp + d() * workers() ;
+		// sending the requests
+		if (thisTime >= packSize()) {
+			Int iw = 0;
+			while (iw < workers())
+			{
+				List<Int> tmp = nth(srcs, iw);
+				IWorker w = nth(ws2, iw);
+				if (tmp != Nil) {
+					Fut<List<Int>> fsrc = w!requests(tmp);
+					fsrcs = appendright(fsrcs, fsrc);
+					ltgts = appendright(ltgts, nth(tgts, iw));
+				}
+				iw = iw + 1;
+			}
+			fd = this!delegates(fsrcs, ltgts); // or await (aliveDelegates < 10);
+			thisTime = 0;
+				srcs = Nil; 
+				tgts = Nil; 
+				fsrcs = Nil;
+				ltgts = Nil;
+			t = 0;
+			while (t < workers()) { 
+				srcs = Cons(lNil, srcs); 
+				tgts = Cons(lNil, tgts); 
+				t = t + 1;
+			}
+		}
+     } // END first while
+     // one while loops to wait for all delegates to finish
+     if (thisTime > 0){
+			Int iw = 0;
+			while (iw < workers())
+			{
+				List<Int> tmp = nth(srcs, iw);
+				IWorker w = nth(ws2, iw);
+				if (tmp != Nil) {
+					Fut<List<Int>> fsrc = w!requests(tmp);
+					fsrcs = appendright(fsrcs, fsrc);
+					ltgts = appendright(ltgts, nth(tgts, iw));
+				}
+				iw = iw + 1;
+			}
+			fd = this!delegates(fsrcs, ltgts); 
+	}
+     await this.aliveDelegates == 0;
+
+ // For testing; local conflict check
+ 	i = 0;
+ 	j = 0;
+ 	while (i<=div(size, d())-1)
+ 	{
+ 		List<Int> pastDraws = Nil;
+ 		j = 0;
+ 		while (j<=d()-1)
+ 		{
+ 			Int index = i * d() + j ;
+ 			u = nth(arrr, index);
+ 			//println(toString(u));
+ 			if (isElem(u,pastDraws) || u == 0) 
+ 				println(toString(u));
+ 			else 
+ 				pastDraws = Cons(u,pastDraws);
+ 			j = j + 1;
+ 		} 
+ 		i = i + 1;
+ 	}
+
+   }
+
+   Int request(Int source){ // to return the requested slot of the worker when it is resolved
+	   Int n = 0;
+	   if (source > kinit()){
+		    await (nth(arrr, localIndex(source)) != 0);
+		    n = nth(arrr, localIndex(source));
+	   }
+	   else 
+		    n = nth(initArrr, source);
+	   return n;
+   }
+
+   List<Int> requests(List<Int> src){ // to return the requested slot of the worker when it is resolved
+	   List<Int> tgt = Nil;
+	   List<Int> src2 = src;
+	   while(src2 != Nil){
+		   Int source = head(src2);
+		   src2 = tail(src2);
+		   Int t = 0;
+		   if (source > kinit()){
+			    await (nth(arrr, localIndex(source)) !=0);
+			    t = nth(arrr, localIndex(source));
+		   }
+		   else
+			    t = nth(initArrr, source);
+		   tgt = Cons(t, tgt);
+	   }
+	   tgt = reverse(tgt);
+	   return tgt;
+   }
+
+   Unit delegates(List<Fut<List<Int>>> fsrcs, List<List<Int>> tgts) {
+	GenIO g = createSystemRandom();
+	List<List<Int>> tgts2 = tgts;
+	List<Fut<List<Int>>> fsrcs2 = fsrcs;
+	while (fsrcs2 != Nil) {
+		Fut<List<Int>> fsrc = head(fsrcs2);
+		await fsrc?;
+		List<Int> src = fsrc.get;
+		List<Int> tgt = head(tgts2);
+		tgts2 = tail(tgts2);
+		fsrcs2 = tail(fsrcs2);
+
+		// START inlined conflictcheck
+		while (src != Nil){
+			Int u = head(src);
+			Int target = head(tgt);
+			src = tail(src);
+			tgt = tail(tgt);
+			Bool found = False;
+			if (u != -1) {
+			    Int i = div((target - 1),d()) * d() + 1;
+			    Int lCurrentNode = i + d() - 1;
+			    while (i <= lCurrentNode) {
+				Int v = nth(arrr, localIndex(i));
+				if (u == v) {
+				  found = True;
+				  i = lCurrentNode + 1; //just to break the while
+				}
+				i = i + 1;
+			    }
+			} // END inlined conflictcheck
+			if (found || u == -1) { // if conflict happens or it's an -1 from initial clique
+			    u = div((target - 1),d()) * d();
+			    Int u2 = uniformR(Pair(kinit()+1,u), g);//random(u-kinit()) + kinit() + 1;
+			    IWorker w = nth(ws2, actorIndex(u2));
+			    Fut<Int> fp = w!request(u2);
+			    this.delegate(fp, target);
+			}
+			else { // the slot is resolved
+			    arrr = writenth(arrr, localIndex(target), u, Nil);
+			    aliveDelegates = aliveDelegates -1;
+			}
+		}
+	}
+  }
+
+   Unit delegate(Fut<Int> ft, Int target) { // if the requested slot belongs to another worker
+      GenIO g = createSystemRandom();
+      await ft?;
+      Int u = ft.get;
+      // START inlined conflictcheck
+	    Bool found = False;
+	    if (u != -1) {
+		    Int i = div((target - 1),d()) * d() + 1;
+		    Int lCurrentNode = i + d() - 1;
+		    while (i <= lCurrentNode) {
+			Int v = nth(arrr, localIndex(i));
+			if (u == v) {
+				found = True;
+				i = lCurrentNode + 1; //just to break the while
+			}
+			i = i + 1;
+		    }
+	   } // END inlined conflictcheck
+     if (found || u == -1) { // if conflict happens or it's an -1 from initial clique
+		    u = div((target - 1),d()) * d();
+		    Int u2 = uniformR(Pair(kinit()+ 1,u), g); //random(u-kinit()) + kinit() + 1;
+		    IWorker w = nth(ws2, actorIndex(u2));
+		    Fut<Int> fp = w!request(u2);
+		    this.delegate(fp, target);
+     }
+     else { // the slot is resolved
+		    arrr = writenth(arrr, localIndex(target), u, Nil);
+		    aliveDelegates = aliveDelegates -1;
+     }
+  }
+
+
+}
+
+// MAIN ///////////
+///////////////////
+{
+ 
+ // START creating the workers
+ Int i = workers();
+ IWorker w;
+ Int size = div(num() - (d()+1),workers());
+ Int off = num() - (d()+1) - size * workers();
+ List<IWorker> ws = Nil;
+ while (i>0) {
+	if (off >= i)
+    w = new Worker(i, (size + 1)*d());
+	else
+		w = new Worker(i, size*d());
+	ws = Cons(w,ws);
+	i = i - 1;
+ }
+ // END creating the workers
+
+ //Start parallel initialization of the array by workers
+ Fut<Unit> ff;
+ List<IWorker> ws_ = ws;
+ List<Fut<Unit>> fs = Nil;
+ while (ws_ != Nil) {
+	w = head(ws_);
+	ff = w ! init_(ws);
+	fs = Cons(ff,fs);
+	ws_ = tail(ws_);
+ }
+ // wait for workers to finish initialize
+ while (fs != Nil) {
+     head(fs).get;
+     fs = tail(fs);
+ }
+ //End parallel initialization of the array by workers
+
+ 
+ // START RUNNING
+ println("START RUNNING");
+ while (ws != Nil) {
+     w = head(ws);
+	   ff = w ! run_();  // run each worker
+     fs = Cons(ff,fs);
+     ws = tail(ws);
+ }
+ // wait for workers to finish run
+ while (fs != Nil) {
+     head(fs).get;
+     fs = tail(fs);
+ }
+println("END");
+}
