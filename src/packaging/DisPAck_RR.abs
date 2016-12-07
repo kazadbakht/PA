@@ -42,11 +42,11 @@ def Vector<A> toVector<A>(List<A> l) = fromList(l);
 
 // Parameters to the PA problem
 //////////////////////////
-def Int num() = 100000;         // the maximum people we want to simulate
-def Int d() = 3;               // the attachment (friendliness) degree
+def Int num() = 10000;         // the maximum people we want to simulate
+def Int d() = 20;               // the attachment (friendliness) degree
 def Int kinit() = d() * (d() + 1); // the given initial clique "social" connections (cells, edges*2) (the initial social is a complete graph)
 def Int workers() = numCapabilities();         // how many workers (threads) running in parallel
-def Int packSize() = 2;
+def Int packSize() = 1;
 
 // Utility functions
 def Bool isElem<A>(A l, List<A> ls) = case ls {
@@ -77,16 +77,21 @@ class Worker(Int workerId, Int size) implements IWorker {
    IOVector<Fut<Int>> arr; // local partition
    IOVector<Fut<Int>> initArr; // each worker has a copy of initial clique (performance)
    List<IWorker> ws2 = Nil;
-   List<List<Int>> srcs = Nil;
-   List<List<Int>> tgts = Nil;
+//   List<List<Int>> srcs = Nil;
+//   List<List<Int>> tgts = Nil;
+   IOVector<List<Int>> srcs; // local partition
+   IOVector<List<Int>> tgts; // each worker has a copy of initial clique (performance)
    Int thisTime = 0;
 
    Unit init_(List<IWorker> ws) {
 	   this.ws2 = ws;
 //	   arrr = Cons(0, Nil);
 //	   initArrr = Cons(0, Nil);
- 	  this.arr = unsafeNew(size + 1); 
+	  this.arr = unsafeNew(size + 1); 
 	  this.initArr = unsafeNew(kinit()+1); 
+	  this.srcs = unsafeNew(workers()); 
+	  this.tgts = unsafeNew(workers()); 
+
      // START INIT clique of the graph
 
 	   Fut<Int> c;
@@ -144,9 +149,12 @@ class Worker(Int workerId, Int size) implements IWorker {
 	   GenIO g = createSystemRandom();
 	   Maybe<Int> maybeElement = Nothing;
 	   while (t < workers()) { 
-	   	srcs = Cons(lNil, srcs); 
-	   	tgts = Cons(lNil, tgts); 
-	   	t = t + 1;
+//	   	srcs = Cons(lNil, srcs); 
+//	   	tgts = Cons(lNil, tgts); 
+//	   	t = t + 1;
+		write(tgts, t, Nil);
+		write(srcs, t, Nil);
+		t = t + 1;
 	   }
 	   while (i <= num()) {
 		    j = 1;
@@ -186,12 +194,12 @@ class Worker(Int workerId, Int size) implements IWorker {
 			     else {             // here you pick from the real array
 				    if (source > kinit()){
 					Int aIndex = actorIndex(source);
-					List<Int> tgt = nth(tgts, aIndex);
-					List<Int> src = nth(srcs, aIndex);
+					List<Int> tgt = read(tgts, aIndex);
+					List<Int> src = read(srcs, aIndex);
 					src = appendright(src, source);
 					tgt = appendright(tgt, target);
-					tgts = writenth(tgts, aIndex, tgt, Nil);
-					srcs = writenth(srcs, aIndex, src, Nil);
+					write(tgts, aIndex, tgt);
+					write(srcs, aIndex, src);
 					aliveDelegates = aliveDelegates + 1;
 					thisTime = thisTime+1; 
 				    }
@@ -218,25 +226,25 @@ class Worker(Int workerId, Int size) implements IWorker {
 			Int iw = 0;
 			while (iw < workers())
 			{
-				List<Int> tmp = nth(srcs, iw);
+				List<Int> tmp = read(srcs, iw);
 				IWorker w = nth(ws2, iw);
 				if (tmp != Nil) {
 					Fut<List<Int>> fsrc = w!requests(tmp);
 					fsrcs = appendright(fsrcs, fsrc);
-					ltgts = appendright(ltgts, nth(tgts, iw));
+					ltgts = appendright(ltgts, read(tgts, iw));
 				}
 				iw = iw + 1;
 			}
 			fd = this!delegates(fsrcs, ltgts); // or await (aliveDelegates < 10);
 			thisTime = 0;
-				srcs = Nil; 
-				tgts = Nil; 
+				//srcs = Nil; 
+				//tgts = Nil; 
 				fsrcs = Nil;
 				ltgts = Nil;
 			t = 0;
 			while (t < workers()) { 
-				srcs = Cons(lNil, srcs); 
-				tgts = Cons(lNil, tgts); 
+				write(srcs, t, Nil); 
+				write(tgts, t, Nil); 
 				t = t + 1;
 			}
 		}
@@ -246,12 +254,12 @@ class Worker(Int workerId, Int size) implements IWorker {
 			Int iw = 0;
 			while (iw < workers())
 			{
-				List<Int> tmp = nth(srcs, iw);
+				List<Int> tmp = read(srcs, iw);
 				IWorker w = nth(ws2, iw);
 				if (tmp != Nil) {
 					Fut<List<Int>> fsrc = w!requests(tmp);
 					fsrcs = appendright(fsrcs, fsrc);
-					ltgts = appendright(ltgts, nth(tgts, iw));
+					ltgts = appendright(ltgts, read(tgts, iw));
 				}
 				iw = iw + 1;
 			}
@@ -260,26 +268,26 @@ class Worker(Int workerId, Int size) implements IWorker {
      await this.aliveDelegates == 0;
 
  // For testing; local conflict check
- 	i = 0;
- 	j = 0;
- 	while (i<=div(size, d())-1)
- 	{
- 		List<Int> pastDraws = Nil;
- 		j = 0;
- 		while (j<=d()-1)
- 		{
- 			Int index = i * d() + j ;
- 			//u = nth(arrr, index);
-			u = read(arr, index).get;
- 			//println(toString(u));
- 			if (isElem(u,pastDraws) || u == 0) 
- 				println(toString(u));
- 			else 
- 				pastDraws = Cons(u,pastDraws);
- 			j = j + 1;
- 		} 
- 		i = i + 1;
- 	}
+// 	i = 0;
+// 	j = 0;
+// 	while (i<=div(size, d())-1)
+// 	{
+// 		List<Int> pastDraws = Nil;
+// 		j = 0;
+// 		while (j<=d()-1)
+// 		{
+// 			Int index = i * d() + j ;
+// 			//u = nth(arrr, index);
+//			u = read(arr, index).get;
+// 			//println(toString(u));
+// 			if (isElem(u,pastDraws) || u == 0) 
+// 				println(toString(u));
+// 			else 
+// 				pastDraws = Cons(u,pastDraws);
+// 			j = j + 1;
+// 		} 
+// 		i = i + 1;
+// 	}
 
    }
 
@@ -460,6 +468,7 @@ class Worker(Int workerId, Int size) implements IWorker {
  
  // START RUNNING
  println("START RUNNING");
+ TimeSpec t1 = getTime(Monotonic);
  while (ws != Nil) {
      w = head(ws);
 	   ff = w ! run_();  // run each worker
@@ -471,5 +480,6 @@ class Worker(Int workerId, Int size) implements IWorker {
      head(fs).get;
      fs = tail(fs);
  }
+ println(toString(diff(getTime(Monotonic),t1))); //  print the difference (NOW - t1)
 println("END");
 }
