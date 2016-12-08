@@ -1,4 +1,4 @@
-module DisPAck_RR;
+module DisPAck_RR_IntList;
 
 // The mutable-array operations
 fimport IOVector from Data.Vector.Mutable;
@@ -32,6 +32,23 @@ fimport unsafePerformIO from System.IO.Unsafe;
 fimport quot from Prelude; 
 fimport rem from Prelude; 
 
+data IntList = NilI | ConsI(Int, IntList);
+def Int headI(IntList l) = case l {
+	NilI => -1;
+	ConsI(x, _) => x;
+};
+
+def IntList tailI(IntList l) = case l {
+	NilI => NilI;
+	ConsI(x, xs) => xs;
+};
+
+def IntList reverseI(IntList l) = rev(l, NilI);
+def IntList rev(IntList l1, IntList l2) = case l1 {
+	NilI => l2;
+	ConsI(x, xl) => rev(xl, ConsI(x, l2));
+};
+
 // these aliases are needed because foreign code is pure but used also as impure 
 def Int div(Int n, Int d) = quot(n,d);  
 def Int mod(Int n, Int d) = rem(n,d); 
@@ -53,6 +70,7 @@ def Bool isElem<A>(A l, List<A> ls) = case ls {
     Nil => False;
     Cons(l_,ls_) => l == l_ || isElem(l,ls_);
 };
+
 def Int localIndex(Int index) = div((div(index-1,d())+1 - (d() + 2)),workers())*d() + mod(index-1,d());
 def Int actorIndex(Int index) = mod(div(index-1,d())+1 - (d() + 2), workers());
 
@@ -67,7 +85,7 @@ interface IWorker {
   Unit run_();
   Unit init_(List<IWorker> ws);
   Int request(Int source);
-  List<Int> requests(List<Int> src);
+  IntList requests(IntList src);
 }
 
 class Worker(Int workerId, Int size) implements IWorker {
@@ -77,8 +95,8 @@ class Worker(Int workerId, Int size) implements IWorker {
    IOVector<Fut<Int>> arr; // local partition
    IOVector<Fut<Int>> initArr; // each worker has a copy of initial clique (performance)
    List<IWorker> ws2 = Nil;
-   List<List<Int>> srcs = Nil;
-   List<List<Int>> tgts = Nil;
+   List<IntList> srcs = Nil;
+   List<IntList> tgts = Nil;
    Int thisTime = 0;
 
    Unit init_(List<IWorker> ws) {
@@ -137,10 +155,10 @@ class Worker(Int workerId, Int size) implements IWorker {
 	   Int target = 0;
 	   Int u = 0;
 	   Fut<Unit> fd;
- 	   List<Fut<List<Int>>> fsrcs=Nil;
-	   List<List<Int>> ltgts=Nil;
+ 	   List<Fut<IntList>> fsrcs=Nil;
+	   List<IntList> ltgts=Nil;
 	   Int t = 0;
-	   List<Int> lNil = Nil;
+	   IntList lNil = NilI;
 	   GenIO g = createSystemRandom();
 	   Maybe<Int> maybeElement = Nothing;
 	   while (t < workers()) { 
@@ -186,10 +204,10 @@ class Worker(Int workerId, Int size) implements IWorker {
 			     else {             // here you pick from the real array
 				    if (source > kinit()){
 					Int aIndex = actorIndex(source);
-					List<Int> tgt = nth(tgts, aIndex);
-					List<Int> src = nth(srcs, aIndex);
-					src = Cons(source, src);
-					tgt = Cons(target, tgt);
+					IntList tgt = nth(tgts, aIndex);
+					IntList src = nth(srcs, aIndex);
+					src = ConsI(source, src);
+					tgt = ConsI(target, tgt);
 					tgts = writenth(tgts, aIndex, tgt, Nil);
 					srcs = writenth(srcs, aIndex, src, Nil);
 					aliveDelegates = aliveDelegates + 1;
@@ -218,13 +236,13 @@ class Worker(Int workerId, Int size) implements IWorker {
 			Int iw = 0;
 			while (iw < workers())
 			{
-				List<Int> tmp = nth(srcs, iw);
+				IntList tmp = nth(srcs, iw);
 				IWorker w = nth(ws2, iw);
-				if (tmp != Nil) {
-					tmp = reverse(tmp);
-					Fut<List<Int>> fsrc = w!requests(tmp);
+				if (tmp != NilI) {
+					tmp = reverseI(tmp);
+					Fut<IntList> fsrc = w!requests(tmp);
 					fsrcs = Cons(fsrc, fsrcs);
-					ltgts = Cons(reverse(nth(tgts, iw)), ltgts);
+					ltgts = Cons(reverseI(nth(tgts, iw)), ltgts);
 				}
 				iw = iw + 1;
 			}
@@ -247,13 +265,13 @@ class Worker(Int workerId, Int size) implements IWorker {
 			Int iw = 0;
 			while (iw < workers())
 			{
-				List<Int> tmp = nth(srcs, iw);
+				IntList tmp = nth(srcs, iw);
 				IWorker w = nth(ws2, iw);
-				if (tmp != Nil) {
-					tmp = reverse(tmp);
-					Fut<List<Int>> fsrc = w!requests(tmp);
+				if (tmp != NilI) {
+					tmp = reverseI(tmp);
+					Fut<IntList> fsrc = w!requests(tmp);
 					fsrcs = Cons(fsrc, fsrcs);
-					ltgts = Cons(reverse(nth(tgts, iw)), ltgts);
+					ltgts = Cons(reverseI(nth(tgts, iw)), ltgts);
 				}
 				iw = iw + 1;
 			}
@@ -300,12 +318,12 @@ class Worker(Int workerId, Int size) implements IWorker {
 	   return n;
    }
 
-   List<Int> requests(List<Int> src){ // to return the requested slot of the worker when it is resolved
-	   List<Int> tgt = Nil;
-	   List<Int> src2 = src;
-	   while(src2 != Nil){
-		   Int source = head(src2);
-		   src2 = tail(src2);
+   IntList requests(IntList src){ // to return the requested slot of the worker when it is resolved
+	   IntList tgt = NilI;
+	   IntList src2 = src;
+	   while(src2 != NilI){
+		   Int source = headI(src2);
+		   src2 = tailI(src2);
 		   Int t = 0;
 		   if (source > kinit()){
 			    //await (nth(arrr, localIndex(source)) !=0);
@@ -317,30 +335,30 @@ class Worker(Int workerId, Int size) implements IWorker {
 		   else
 			    //t = nth(initArrr, source);
 			    t = read(initArr, source).get;
-		   tgt = Cons(t, tgt);
+		   tgt = ConsI(t, tgt);
 	   }
-	   tgt = reverse(tgt);
+	   tgt = reverseI(tgt);
 	   return tgt;
    }
 
-   Unit delegates(List<Fut<List<Int>>> fsrcs, List<List<Int>> tgts) {
+   Unit delegates(List<Fut<IntList>> fsrcs, List<IntList> tgts) {
 	GenIO g = createSystemRandom();
-	List<List<Int>> tgts2 = tgts;
-	List<Fut<List<Int>>> fsrcs2 = fsrcs;
+	List<IntList> tgts2 = tgts;
+	List<Fut<IntList>> fsrcs2 = fsrcs;
 	while (fsrcs2 != Nil) {
-		Fut<List<Int>> fsrc = head(fsrcs2);
+		Fut<IntList> fsrc = head(fsrcs2);
 		await fsrc?;
-		List<Int> src = fsrc.get;
-		List<Int> tgt = head(tgts2);
+		IntList src = fsrc.get;
+		IntList tgt = head(tgts2);
 		tgts2 = tail(tgts2);
 		fsrcs2 = tail(fsrcs2);
 
 		// START inlined conflictcheck
-		while (src != Nil){
-			Int u = head(src);
-			Int target = head(tgt);
-			src = tail(src);
-			tgt = tail(tgt);
+		while (src != NilI){
+			Int u = headI(src);
+			Int target = headI(tgt);
+			src = tailI(src);
+			tgt = tailI(tgt);
 			Bool found = False;
 			if (u != -1) {
 			    Int i = div((target - 1),d()) * d() + 1;
