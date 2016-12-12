@@ -47,7 +47,7 @@ def Int num() = 10000;         // the maximum people we want to simulate
 def Int d() = 20;               // the attachment (friendliness) degree
 def Int kinit() = d() * (d() + 1); // the given initial clique "social" connections (cells, edges*2) (the initial social is a complete graph)
 def Int workers() = numCapabilities();         // how many workers (threads) running in parallel
-def Int packSize() = 1;
+def Int packSize() = 4;
 
 // Utility functions
 def Bool isElem<A>(A l, List<A> ls) = case ls {
@@ -83,6 +83,8 @@ class Worker(Int workerId, Int size) implements IWorker {
    IOVector<IOVector<Int>> srcs; // local partition
    IOVector<IOVector<Int>> tgts; // each worker has a copy of initial clique (performance)
    Int thisTime = 0;
+	GenIO g;
+{	   this.g = createSystemRandom();}
 
    Unit init_(List<IWorker> ws) {
 	   this.ws2 = ws;
@@ -147,7 +149,6 @@ class Worker(Int workerId, Int size) implements IWorker {
 	   IOVector<IOVector<Int>> ltgts = unsafeNew(workers()+1);
 	   Int t = 0;
 //	   List<Int> lNil = Nil;
-	   GenIO g = createSystemRandom();
 	   Maybe<Int> maybeElement = Nothing;
 	   while (t < workers()) { 
 //	   	srcs = Cons(lNil, srcs); 
@@ -163,7 +164,7 @@ class Worker(Int workerId, Int size) implements IWorker {
 		    j = 1;
 		    List<Int> pastDraws = Nil;
 		    while (j <= d()) {
-			     source = uniformR(Pair(1,temp*2), g);//random(temp*2) + 1;
+			     source = uniformR(Pair(1,temp*2), this.g);//random(temp*2) + 1;
 			     target = temp + j;
 			     u = 0;				
 			     if (source > temp) { // this is for the coin flipping, it means that you pick from the shadow array
@@ -343,7 +344,7 @@ class Worker(Int workerId, Int size) implements IWorker {
 
    Unit delegates(IOVector<Fut<IOVector<Int>>> fsrcs, IOVector<IOVector<Int>> tgts, Int ds) {
 
-	GenIO g = createSystemRandom();
+	//GenIO g = createSystemRandom();
 	IOVector<IOVector<Int>> tgts2 = tgts;
 	IOVector<Fut<IOVector<Int>>> fsrcs2 = fsrcs;
 	Int counter = 1;
@@ -383,7 +384,7 @@ class Worker(Int workerId, Int size) implements IWorker {
 			}
 			if (found || u == -1) { // if conflict happens or it's an -1 from initial clique
 			    u = div((target - 1),d()) * d();
-			    Int u2 = uniformR(Pair(kinit()+1,u), g);//random(u-kinit()) + kinit() + 1;
+			    Int u2 = uniformR(Pair(kinit()+1,u), this.g);//random(u-kinit()) + kinit() + 1;
 			    IWorker w = nth(ws2, actorIndex(u2));
 			    Fut<Int> fp = w!request(u2);
 			    this.delegate(fp, target);
@@ -400,7 +401,7 @@ class Worker(Int workerId, Int size) implements IWorker {
   }
 
    Unit delegate(Fut<Int> ft, Int target) { // if the requested slot belongs to another worker
-      GenIO g = createSystemRandom();
+      //GenIO g = createSystemRandom();
       await ft?;
       Int u = ft.get;
       // START inlined conflictcheck
@@ -432,7 +433,7 @@ class Worker(Int workerId, Int size) implements IWorker {
 		}
      if (found || u == -1) { // if conflict happens or it's an -1 from initial clique
 		    u = div((target - 1),d()) * d();
-		    Int u2 = uniformR(Pair(kinit()+ 1,u), g); //random(u-kinit()) + kinit() + 1;
+		    Int u2 = uniformR(Pair(kinit()+ 1,u), this.g); //random(u-kinit()) + kinit() + 1;
 		    IWorker w = nth(ws2, actorIndex(u2));
 		    Fut<Int> fp = w!request(u2);
 		    this.delegate(fp, target);
