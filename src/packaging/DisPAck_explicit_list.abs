@@ -1,4 +1,4 @@
-module DisPAck_explicit;
+module DisPAck_explicit_list;
 
 // The mutable-array operations
 fimport IOVector from Data.Vector.Mutable;
@@ -68,8 +68,8 @@ interface IWorker {
   Unit run_();
   Unit init_(List<IWorker> ws);
   Int request(Int source);
-  Unit requests(IOVector<Int> src, IOVector<Int> tgt, Int initSrc, Int aIn);
-  Unit delegates_(IOVector<Int> src, IOVector<Int> tgt, Int initSrc, Int lastSrc);
+  Unit requests(List<Int> src, List<Int> tgt, Int aIn);
+  Unit delegates_(List<Int> src, List<Int> tgt);
 }
 
 class Worker(Int workerId, Int size) implements IWorker {
@@ -81,8 +81,8 @@ class Worker(Int workerId, Int size) implements IWorker {
    List<IWorker> ws2 = Nil;
 //   List<List<Int>> srcs = Nil;
 //   List<List<Int>> tgts = Nil;
-   IOVector<IOVector<Int>> srcs; // local partition
-   IOVector<IOVector<Int>> tgts; // each worker has a copy of initial clique (performance)
+   IOVector<List<Int>> srcs; // local partition
+   IOVector<List<Int>> tgts; // each worker has a copy of initial clique (performance)
    Int thisTime = 0;
 	GenIO g;
 {	   this.g = createSystemRandom();}
@@ -155,10 +155,8 @@ class Worker(Int workerId, Int size) implements IWorker {
 //	   	srcs = Cons(lNil, srcs); 
 //	   	tgts = Cons(lNil, tgts); 
 //	   	t = t + 1;
-		write(srcs, t, unsafeNew(packSize() + d()));
-		write(tgts, t, unsafeNew(packSize() + d()));
-		write(read(srcs, t), 0, 0);
-		write(read(tgts, t), 0, 0);
+		write(srcs, t, Nil);
+		write(tgts, t, Nil);
 		t = t + 1;
 	   }
 	   while (i <= num()) {
@@ -199,16 +197,10 @@ class Worker(Int workerId, Int size) implements IWorker {
 			     else {             // here you pick from the real array
 				    if (source > kinit()){
 					Int aIndex = actorIndex(source);
-					IOVector<Int> tgt = read(tgts, aIndex);
-					IOVector<Int> src = read(srcs, aIndex);
-					Int sInx = read(src, 0);
-					Int tInx = read(tgt, 0);
-					write(src, sInx+1, source);
-					write(tgt, tInx+1, target);
-					write(src, 0, sInx+1);
-					write(tgt, 0, tInx+1);
-					//write(tgts, aIndex, tgt);
-					//write(srcs, aIndex, src);
+					List<Int> tgt = read(tgts, aIndex);
+					List<Int> src = read(srcs, aIndex);
+					write(tgts, aIndex, Cons(target, tgt));
+					write(srcs, aIndex, Cons(source, src));
 					aliveDelegates = aliveDelegates + 1;
 					thisTime = thisTime+1; 
 				    }
@@ -235,11 +227,11 @@ class Worker(Int workerId, Int size) implements IWorker {
 			Int delInx = 0;
 			while (iw < workers())
 			{
-				IOVector<Int> tmp = read(srcs, iw);
+				List<Int> tmp = read(srcs, iw);
 				IWorker w = nth(ws2, iw);
-				if (read(tmp, 0) != 0) {
+				if (tmp != Nil) {
 //					delInx = delInx + 1;
-					this!pass(clone(tmp) , clone(read(tgts, iw)),  1, workerId-1, w);
+					this!pass(reverse(tmp) , reverse(read(tgts, iw)), workerId-1, w);
 //					write(fsrcs, delInx, fsrc);
 //					write(ltgts, delInx, clone(read(tgts, iw)));
 				}
@@ -251,8 +243,8 @@ class Worker(Int workerId, Int size) implements IWorker {
 			//tgts = Nil; 
 			t = 0;
 			while (t < workers()) { 
-				write(read(srcs, t), 0, 0); 
-				write(read(tgts, t), 0, 0); 
+				write(srcs, t, Nil); 
+				write(tgts, t, Nil); 
 				t = t + 1;
 			}
 		}
@@ -264,11 +256,11 @@ class Worker(Int workerId, Int size) implements IWorker {
 			Int delInx = 0;
 			while (iw < workers())
 			{
-				IOVector<Int> tmp = read(srcs, iw);
-				IWorker w = nth(this.ws2, iw);
-				if (read(tmp, 0) != 0) {
-					delInx = delInx + 1;
-					this!pass(clone(tmp),clone(read(tgts, iw)), 1, workerId-1, w);
+				List<Int> tmp = read(srcs, iw);
+				IWorker w = nth(ws2, iw);
+				if (tmp != Nil) {
+//					delInx = delInx + 1;
+					this!pass(reverse(tmp) , reverse(read(tgts, iw)), workerId-1, w);
 //					write(fsrcs, delInx, fsrc);
 //					write(ltgts, delInx, clone(read(tgts, iw)));
 				}
@@ -301,9 +293,9 @@ class Worker(Int workerId, Int size) implements IWorker {
 // 	}
 
    }
-   Unit pass(IOVector<Int> src, IOVector<Int> tgt, Int initSrc, Int aIn, IWorker w)
+   Unit pass(List<Int> src, List<Int> tgt, Int aIn, IWorker w)
 	{
-		w!requests(src , tgt,  initSrc, aIn);
+		w!requests(src , tgt, aIn);
 	}
 
    Int request(Int source){ // to return the requested slot of the worker when it is resolved
@@ -321,16 +313,17 @@ class Worker(Int workerId, Int size) implements IWorker {
 	   return n;
    }
 
-   Unit requests(IOVector<Int> src, IOVector<Int> tgt, Int initSrc, Int aIn){ // to return the requested slot of the worker when it is resolved
-	   Int counter = read(src, 0);
-	   IOVector<Int> srcd = unsafeNew(counter + 1);
-	   IOVector<Int> src2 = src;
-	   Int initT = initSrc;
-	   Int cSrc = initSrc;
+   Unit requests(List<Int> src, List<Int> tgt, Int aIn){ // to return the requested slot of the worker when it is resolved
+	   List<Int> srcd = Nil; //unsafeNew(counter + 1);
+	   List<Int> src2 = src;
+	   List<Int> tgtd = Nil; //unsafeNew(counter + 1);
+	   List<Int> tgt2 = tgt;
 	   Fut<Unit> f2; 
-	   while(cSrc <= counter){
-		   Int source = read(src2, cSrc);
-//		   src2 = tail(src2);
+	   while(src2 != Nil){
+		   Int source = head(src2);
+		   src2 = tail(src2);
+		   Int target = head(tgt2);
+		   tgt2 = tail(tgt2);
 		   Int t = 0;
 		   if (source > kinit()){
 			    //await (nth(arrr, localIndex(source)) !=0);
@@ -338,12 +331,13 @@ class Worker(Int workerId, Int size) implements IWorker {
 			    Maybe<Int> maybeElement = f.pro_try;
 			    if (isJust(maybeElement))
 				      t = fromJust(maybeElement);
-			    else if (cSrc > initSrc)
+			    else if (srcd != Nil)
 			    {
 				      //f2 = this!requests(src, tgt, cSrc, aIn);
 				      IWorker iw = nth(ws2, aIn);
-				      iw!delegates_(clone(srcd), clone(tgt), initT, cSrc-1);
-				      initT = cSrc;
+				      iw!delegates_(reverse(srcd), reverse(tgtd));
+				      srcd = Nil;
+				      tgtd = Nil;
 				      await f?;
 				      t = f.get;
 			    }
@@ -357,15 +351,15 @@ class Worker(Int workerId, Int size) implements IWorker {
 		   else
 			    //t = nth(initArrr, source);
 			    t = read(initArr, source).get;
-		   write(srcd, cSrc, t);
-		   cSrc = cSrc + 1;
+		   srcd = Cons(t, srcd);
+		   tgtd = Cons(target, tgtd);
 	   }
-	   if (cSrc > initSrc)
+	   if (srcd != Nil)
 	   {
 		IWorker iw = nth(ws2, aIn);
-		iw!delegates_(clone(srcd), clone(tgt), initT, cSrc-1);
+		iw!delegates_(reverse(srcd), reverse(tgtd));
 	   }
-//	   tgt = reverse(tgt);
+	   //tgt = reverse(tgt);
    }
 
 //   Unit delegates(IOVector<Fut<IOVector<Int>>> fsrcs, IOVector<IOVector<Int>> tgts, Int ds) {
@@ -426,22 +420,15 @@ class Worker(Int workerId, Int size) implements IWorker {
 //	}
 //  }
 
-   Unit delegates_(IOVector<Int> src, IOVector<Int> tgt, Int initSrc, Int lastSrc) {
-		//await fsrc?;
-		//IOVector<Int> src = fsrc.get;
-		//IOVector<Int> tgt = read(tgts2, counter);
-		Int length = read(tgt, 0);
-//		println(toString(length));
-//		tgts2 = tail(tgts2);
-//		fsrcs2 = tail(fsrcs2);
-
-		Int cSrc = initSrc;
-		while (cSrc <= lastSrc){
+   Unit delegates_(List<Int> src2, List<Int> tgt2) {
+		List<Int> src = src2;
+		List<Int> tgt = tgt2;
+		while (src!=Nil){
 //			println(toString(cSrc));
-			Int u = read(src, cSrc);
-			Int target = read(tgt, cSrc);
-//			src = tail(src);
-//			tgt = tail(tgt);
+			Int u = head(src);
+			Int target = head(tgt);
+			src = tail(src);
+			tgt = tail(tgt);
 			Bool found = False;
 			if (u != -1) {
 			    Int i = div((target - 1),d()) * d() + 1;
@@ -473,7 +460,6 @@ class Worker(Int workerId, Int size) implements IWorker {
 			    read(arr, localIndex(target)).pro_give(u);
 			    aliveDelegates = aliveDelegates -1;
 			}
-			cSrc =cSrc + 1;
 		}
    }
 
