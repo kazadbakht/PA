@@ -1,4 +1,4 @@
-module DisPAck_RR;
+module DisPAck;
 
 // The mutable-array operations
 fimport IOVector from Data.Vector.Mutable;
@@ -47,7 +47,7 @@ def Int num() = 1000000;         // the maximum people we want to simulate
 def Int d() = 3;               // the attachment (friendliness) degree
 def Int kinit() = d() * (d() + 1); // the given initial clique "social" connections (cells, edges*2) (the initial social is a complete graph)
 def Int workers() = numCapabilities();         // how many workers (threads) running in parallel
-def Int packSize() = 4;
+def Int packSize() = 1000;
 
 // Utility functions
 def Bool isElem<A>(A l, List<A> ls) = case ls {
@@ -68,7 +68,8 @@ interface IWorker {
   Unit run_();
   Unit init_(List<IWorker> ws);
   Int request(Int source);
-  IOVector<Int> requests(IOVector<Int> src);
+  Unit requests(List<Int> src, List<Int> tgt, Int aIn);
+  Unit delegates_(List<Int> src, List<Int> tgt);
 }
 
 class Worker(Int workerId, Int size) implements IWorker {
@@ -80,8 +81,8 @@ class Worker(Int workerId, Int size) implements IWorker {
    List<IWorker> ws2 = Nil;
 //   List<List<Int>> srcs = Nil;
 //   List<List<Int>> tgts = Nil;
-   IOVector<IOVector<Int>> srcs; // local partition
-   IOVector<IOVector<Int>> tgts; // each worker has a copy of initial clique (performance)
+   IOVector<List<Int>> srcs; // local partition
+   IOVector<List<Int>> tgts; // each worker has a copy of initial clique (performance)
    Int thisTime = 0;
 	GenIO g;
 {	   this.g = createSystemRandom();}
@@ -145,8 +146,8 @@ class Worker(Int workerId, Int size) implements IWorker {
 	   Int target = 0;
 	   Int u = 0;
 	   Fut<Unit> fd;
- 	   IOVector<Fut<IOVector<Int>>> fsrcs = unsafeNew(workers()+1);
-	   IOVector<IOVector<Int>> ltgts = unsafeNew(workers()+1);
+// 	   IOVector<Fut<IOVector<Int>>> fsrcs = unsafeNew(workers()+1);
+//	   IOVector<IOVector<Int>> ltgts = unsafeNew(workers()+1);
 	   Int t = 0;
 //	   List<Int> lNil = Nil;
 	   Maybe<Int> maybeElement = Nothing;
@@ -154,10 +155,8 @@ class Worker(Int workerId, Int size) implements IWorker {
 //	   	srcs = Cons(lNil, srcs); 
 //	   	tgts = Cons(lNil, tgts); 
 //	   	t = t + 1;
-		write(srcs, t, unsafeNew(packSize() + d()));
-		write(tgts, t, unsafeNew(packSize() + d()));
-		write(read(srcs, t), 0, 0);
-		write(read(tgts, t), 0, 0);
+		write(srcs, t, Nil);
+		write(tgts, t, Nil);
 		t = t + 1;
 	   }
 	   while (i <= num()) {
@@ -198,18 +197,55 @@ class Worker(Int workerId, Int size) implements IWorker {
 			     else {             // here you pick from the real array
 				    if (source > kinit()){
 					Int aIndex = actorIndex(source);
-					IOVector<Int> tgt = read(tgts, aIndex);
-					IOVector<Int> src = read(srcs, aIndex);
-					Int sInx = read(src, 0);
-					Int tInx = read(tgt, 0);
-					write(src, sInx+1, source);
-					write(tgt, tInx+1, target);
-					write(src, 0, sInx+1);
-					write(tgt, 0, tInx+1);
-					//write(tgts, aIndex, tgt);
-					//write(srcs, aIndex, src);
-					aliveDelegates = aliveDelegates + 1;
-					thisTime = thisTime+1; 
+					if (aIndex == workerId-1)
+					{
+						Fut<Int> f = read(arr, localIndex(source));
+						maybeElement = f.pro_try;
+						if (isJust(maybeElement))
+						{
+							Int tt = fromJust(maybeElement);
+							Bool found = False;
+							Int scan = temp+1;
+							while (scan < target) {
+								//maybeElement = Nothing;
+								maybeElement = read(arr, localIndex(scan)).pro_try;
+								case maybeElement {
+									Just(vv) =>{
+										if (tt == vv) {
+										  //println(toString(tt));
+										  found = True;
+										  scan = target; //just to break the while
+										}}
+									_ => skip;
+								}
+								scan = scan + 1;
+							} // END inlined conflictcheck
+							if (found == True)
+								j = j - 1;
+							else{
+								read(arr, localIndex(target)).pro_give(tt);
+								pastDraws = Cons(tt,pastDraws);
+							}
+						}
+						else
+						{
+							List<Int> tgt = read(tgts, aIndex);
+							List<Int> src = read(srcs, aIndex);
+							write(tgts, aIndex, Cons(target, tgt));
+							write(srcs, aIndex, Cons(source, src));
+							aliveDelegates = aliveDelegates + 1;
+							thisTime = thisTime+1;
+						} 
+					}
+					else
+					{
+						List<Int> tgt = read(tgts, aIndex);
+						List<Int> src = read(srcs, aIndex);
+						write(tgts, aIndex, Cons(target, tgt));
+						write(srcs, aIndex, Cons(source, src));
+						aliveDelegates = aliveDelegates + 1;
+						thisTime = thisTime+1;
+					} 
 				    }
 				    else {
 					//u = nth(initArrr, source);
@@ -224,38 +260,38 @@ class Worker(Int workerId, Int size) implements IWorker {
 						read(arr, localIndex(target)).pro_give(u);
 					}
 				    }
-		       }
-		       j = j + 1;
+			    }
+			    j = j + 1;
 		    } // END second while
 		    i = i + workers();
 		    temp = temp + d() * workers() ;
-		// sending the requests
 		if (thisTime >= packSize()) {
 			Int iw = 0;
 			Int delInx = 0;
 			while (iw < workers())
 			{
-				IOVector<Int> tmp = read(srcs, iw);
+				List<Int> tmp = read(srcs, iw);
 				IWorker w = nth(ws2, iw);
-				if (read(tmp, 0) != 0) {
-					delInx = delInx + 1;
-					Fut<IOVector<Int>> fsrc = w!requests(clone(tmp));
-					write(fsrcs, delInx, fsrc);
-					write(ltgts, delInx, clone(read(tgts, iw)));
+				if (tmp != Nil) {
+//					delInx = delInx + 1;
+					this!pass(reverse(tmp) , reverse(read(tgts, iw)), workerId-1, w);
+//					write(fsrcs, delInx, fsrc);
+//					write(ltgts, delInx, clone(read(tgts, iw)));
 				}
 				iw = iw + 1;
 			}
-			fd = this!delegates(clone(fsrcs), clone(ltgts), delInx); // or await (aliveDelegates < 10);
+//			fd = this!delegates(clone(fsrcs), clone(ltgts), delInx); // or await (aliveDelegates < 10);
 			thisTime = 0;
 			//srcs = Nil; 
 			//tgts = Nil; 
 			t = 0;
 			while (t < workers()) { 
-				write(read(srcs, t), 0, 0); 
-				write(read(tgts, t), 0, 0); 
+				write(srcs, t, Nil); 
+				write(tgts, t, Nil); 
 				t = t + 1;
 			}
 		}
+		// sending the requests
      } // END first while
      // one while loops to wait for all delegates to finish
      if (thisTime > 0){
@@ -263,43 +299,58 @@ class Worker(Int workerId, Int size) implements IWorker {
 			Int delInx = 0;
 			while (iw < workers())
 			{
-				IOVector<Int> tmp = read(srcs, iw);
+				List<Int> tmp = read(srcs, iw);
 				IWorker w = nth(ws2, iw);
-				if (read(tmp, 0) != 0) {
-					delInx = delInx + 1;
-					Fut<IOVector<Int>> fsrc = w!requests(clone(tmp));
-					write(fsrcs, delInx, fsrc);
-					write(ltgts, delInx, clone(read(tgts, iw)));
+				if (tmp != Nil) {
+//					delInx = delInx + 1;
+					this!pass(reverse(tmp) , reverse(read(tgts, iw)), workerId-1, w);
+//					write(fsrcs, delInx, fsrc);
+//					write(ltgts, delInx, clone(read(tgts, iw)));
 				}
 				iw = iw + 1;
 			}
-			fd = this!delegates(clone(fsrcs), clone(ltgts), delInx); 
+//			fd = this!delegates(clone(fsrcs), clone(ltgts), delInx); 
 	}
+//     i = 0; 
+//     while (i < (num()-d()-1)*d())
+//	{
+//		maybeElement = read(arr, i).pro_try;
+//		case maybeElement {
+//			Just(vv) =>{
+//				println(toString(vv));}
+//			_ => println("0");
+//		}
+//		i = i+ 1;
+//	}
      await this.aliveDelegates == 0;
 
  // For testing; local conflict check
-// 	i = 0;
-// 	j = 0;
-// 	while (i<=div(size, d())-1)
-// 	{
-// 		List<Int> pastDraws = Nil;
-// 		j = 0;
-// 		while (j<=d()-1)
-// 		{
-// 			Int index = i * d() + j ;
-// 			//u = nth(arrr, index);
-//			u = read(arr, index).get;
-// 			//println(toString(u));
-// 			if (isElem(u,pastDraws) || u == 0) 
-// 				println(toString(u));
-// 			else 
-// 				pastDraws = Cons(u,pastDraws);
-// 			j = j + 1;
-// 		} 
-// 		i = i + 1;
-// 	}
+ 	i = 0;
+ 	j = 0;
+ 	while (i<=div(size, d())-1)
+ 	{
+ 		List<Int> pastDraws = Nil;
+ 		j = 0;
+ 		while (j<=d()-1)
+ 		{
+ 			Int index = i * d() + j ;
+ 			//u = nth(arrr, index);
+			u = read(arr, index).get;
+ 			//println(toString(u));
+ 			if (isElem(u,pastDraws) || u == 0) 
+ 				println(toString(u));
+ 			else 
+ 				pastDraws = Cons(u,pastDraws);
+ 			j = j + 1;
+ 		} 
+ 		i = i + 1;
+ 	}
 
    }
+   Unit pass(List<Int> src, List<Int> tgt, Int aIn, IWorker w)
+	{
+		w!requests(src , tgt, aIn);
+	}
 
    Int request(Int source){ // to return the requested slot of the worker when it is resolved
 	   Int n = 0;
@@ -316,53 +367,122 @@ class Worker(Int workerId, Int size) implements IWorker {
 	   return n;
    }
 
-   IOVector<Int> requests(IOVector<Int> src){ // to return the requested slot of the worker when it is resolved
-	   Int counter = read(src, 0);
-	   IOVector<Int> tgt = unsafeNew(counter + 1);
-	   IOVector<Int> src2 = src;
-	   Int cSrc = 1;
-	   while(cSrc <= counter){
-		   Int source = read(src2, cSrc);
-//		   src2 = tail(src2);
+   Unit requests(List<Int> src, List<Int> tgt, Int aIn){ // to return the requested slot of the worker when it is resolved
+	   List<Int> srcd = Nil; //unsafeNew(counter + 1);
+	   List<Int> src2 = src;
+	   List<Int> tgtd = Nil; //unsafeNew(counter + 1);
+	   List<Int> tgt2 = tgt;
+	   Fut<Unit> f2; 
+	   while(src2 != Nil){
+		   Int source = head(src2);
+		   src2 = tail(src2);
+		   Int target = head(tgt2);
+		   tgt2 = tail(tgt2);
 		   Int t = 0;
 		   if (source > kinit()){
 			    //await (nth(arrr, localIndex(source)) !=0);
 			    Fut<Int> f = read(arr, localIndex(source));
-			    await f?;
+			    Maybe<Int> maybeElement = f.pro_try;
+			    if (isJust(maybeElement))
+				      t = fromJust(maybeElement);
+			    else if (srcd != Nil)
+			    {
+				      //f2 = this!requests(src, tgt, cSrc, aIn);
+				      IWorker iw = nth(ws2, aIn);
+				      iw!delegates_(reverse(srcd), reverse(tgtd));
+				      srcd = Nil;
+				      tgtd = Nil;
+				      await f?;
+				      t = f.get;
+			    }
+			    else 
+			    {
+				      await f?;
+				      t = f.get;
+			    }	
 			    //t = nth(arrr, localIndex(source));
-			    t = f.get;
 		   }
 		   else
 			    //t = nth(initArrr, source);
 			    t = read(initArr, source).get;
-		   write(tgt, cSrc, t);
-		   cSrc = cSrc + 1;
+		   srcd = Cons(t, srcd);
+		   tgtd = Cons(target, tgtd);
 	   }
-//	   tgt = reverse(tgt);
-	   return tgt;
+	   if (srcd != Nil)
+	   {
+		IWorker iw = nth(ws2, aIn);
+		iw!delegates_(reverse(srcd), reverse(tgtd));
+	   }
+	   //tgt = reverse(tgt);
    }
 
-   Unit delegates(IOVector<Fut<IOVector<Int>>> fsrcs, IOVector<IOVector<Int>> tgts, Int ds) {
+//   Unit delegates(IOVector<Fut<IOVector<Int>>> fsrcs, IOVector<IOVector<Int>> tgts, Int ds) {
 
-	//GenIO g = createSystemRandom();
-	IOVector<IOVector<Int>> tgts2 = tgts;
-	IOVector<Fut<IOVector<Int>>> fsrcs2 = fsrcs;
-	Int counter = 1;
-	while (counter <= ds) {
-		Fut<IOVector<Int>> fsrc = read(fsrcs2, counter);
-		await fsrc?;
-		IOVector<Int> src = fsrc.get;
-		IOVector<Int> tgt = read(tgts2, counter);
-		Int length = read(tgt, 0);
-//		tgts2 = tail(tgts2);
-//		fsrcs2 = tail(fsrcs2);
+//	//GenIO g = createSystemRandom();
+//	IOVector<IOVector<Int>> tgts2 = tgts;
+//	IOVector<Fut<IOVector<Int>>> fsrcs2 = fsrcs;
+//	Int counter = 1;
+//	while (counter <= ds) {
+//		Fut<IOVector<Int>> fsrc = read(fsrcs2, counter);
+//		await fsrc?;
+//		IOVector<Int> src = fsrc.get;
+//		IOVector<Int> tgt = read(tgts2, counter);
+//		Int length = read(tgt, 0);
+////		tgts2 = tail(tgts2);
+////		fsrcs2 = tail(fsrcs2);
 
-		Int cSrc = 1;
-		while (cSrc <= length){
-			Int u = read(src, cSrc);
-			Int target = read(tgt, cSrc);
-//			src = tail(src);
-//			tgt = tail(tgt);
+//		Int cSrc = 1;
+//		while (cSrc <= length){
+//			Int u = read(src, cSrc);
+//			Int target = read(tgt, cSrc);
+////			src = tail(src);
+////			tgt = tail(tgt);
+//			Bool found = False;
+//			if (u != -1) {
+//			    Int i = div((target - 1),d()) * d() + 1;
+//			    Int lCurrentNode = i + d() - 1;
+//			    while (i <= lCurrentNode) {
+//				Maybe<Int> maybeElement = Nothing;
+//				maybeElement = read(arr, localIndex(i)).pro_try;
+//				//Int v = nth(arrr, localIndex(i));
+//				case maybeElement {
+//					Just(v) => {
+//						if (u == v) {
+//						  found = True;
+//						  i = lCurrentNode + 1; //just to break the while
+//						}}
+//					_ => skip;
+//				}
+//				i = i + 1;
+//			    } // END inlined conflictcheck
+//			}
+//			if (found || u == -1) { // if conflict happens or it's an -1 from initial clique
+//			    u = div((target - 1),d()) * d();
+//			    Int u2 = uniformR(Pair(kinit()+1,u), this.g);//random(u-kinit()) + kinit() + 1;
+//			    IWorker w = nth(ws2, actorIndex(u2));
+//			    Fut<Int> fp = w!request(u2);
+//			    this.delegate(fp, target);
+//			}
+//			else { // the slot is resolved
+//			    //arrr = writenth(arrr, localIndex(target), u, Nil);
+//			    read(arr, localIndex(target)).pro_give(u);
+//			    aliveDelegates = aliveDelegates -1;
+//			}
+//			cSrc =cSrc + 1;
+//		}
+//		counter = counter+1;
+//	}
+//  }
+
+   Unit delegates_(List<Int> src2, List<Int> tgt2) {
+		List<Int> src = src2;
+		List<Int> tgt = tgt2;
+		while (src!=Nil){
+//			println(toString(cSrc));
+			Int u = head(src);
+			Int target = head(tgt);
+			src = tail(src);
+			tgt = tail(tgt);
 			Bool found = False;
 			if (u != -1) {
 			    Int i = div((target - 1),d()) * d() + 1;
@@ -394,11 +514,8 @@ class Worker(Int workerId, Int size) implements IWorker {
 			    read(arr, localIndex(target)).pro_give(u);
 			    aliveDelegates = aliveDelegates -1;
 			}
-			cSrc =cSrc + 1;
 		}
-		counter = counter+1;
-	}
-  }
+   }
 
    Unit delegate(Fut<Int> ft, Int target) { // if the requested slot belongs to another worker
       //GenIO g = createSystemRandom();
