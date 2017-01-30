@@ -58,11 +58,11 @@ def Int localIndex(Int index) = div((div(index-1,d())+1 - (d() + 2)),workers())*
 def Int actorIndex(Int index) = mod(div(index-1,d())+1 - (d() + 2), workers());
 
 
-def List<A> writenth<A>(List<A> l, Int n, A v, List<A> l0) =
-	case n {
-		0 => concatenate(reverse(l0), Cons(v, tail(l)));
-		_ => writenth(tail(l), n-1, v, Cons(head(l), l0));
-	};
+//def List<A> writenth<A>(List<A> l, Int n, A v, List<A> l0) =
+//	case n {
+//		0 => concatenate(reverse(l0), Cons(v, tail(l)));
+//		_ => writenth(tail(l), n-1, v, Cons(head(l), l0));
+//	};
 
 interface IWorker {
   Unit run_();
@@ -201,41 +201,61 @@ class Worker(Int workerId, Int size) implements IWorker {
 					{
 						Fut<Int> f = read(arr, localIndex(source));
 						maybeElement = f.pro_try;
-						if (isJust(maybeElement))
-						{
-							Int tt = fromJust(maybeElement);
-							Bool found = False;
-							Int scan = temp+1;
-							while (scan < target) {
-								//maybeElement = Nothing;
-								maybeElement = read(arr, localIndex(scan)).pro_try;
-								case maybeElement {
-									Just(vv) =>{
-										if (tt == vv) {
-										  //println(toString(tt));
-										  found = True;
-										  scan = target; //just to break the while
-										}}
-									_ => skip;
+//						if (isJust(maybeElement))
+//						{
+//							Int tt = fromJust(maybeElement);
+//							Bool found = False;
+//							Int scan = temp+1;
+//							while (scan < target) {
+//								//maybeElement = Nothing;
+//								maybeElement = read(arr, localIndex(scan)).pro_try;
+//								case maybeElement {
+//									Just(vv) =>{
+//										if (tt == vv) {
+//										  //println(toString(tt));
+//										  found = True;
+//										  scan = target; //just to break the while
+//										}}
+//									_ => skip;
+//								}
+//								scan = scan + 1;
+//							} // END inlined conflictcheck
+//							if (found == True)
+//								j = j - 1;
+//							else{
+//								read(arr, localIndex(target)).pro_give(tt);
+//								pastDraws = Cons(tt,pastDraws);
+//							}
+//						}
+
+						case maybeElement {
+							Just(v) => {
+								if (isElem(v,pastDraws)) j = j - 1;
+								else {
+									pastDraws = Cons(v,pastDraws);
+									read(arr, localIndex(target)).pro_give(v);
 								}
-								scan = scan + 1;
-							} // END inlined conflictcheck
-							if (found == True)
-								j = j - 1;
-							else{
-								read(arr, localIndex(target)).pro_give(tt);
-								pastDraws = Cons(tt,pastDraws);
 							}
-						}
-						else
-						{
+							_ =>	{
 							List<Int> tgt = read(tgts, aIndex);
 							List<Int> src = read(srcs, aIndex);
 							write(tgts, aIndex, Cons(target, tgt));
 							write(srcs, aIndex, Cons(source, src));
 							aliveDelegates = aliveDelegates + 1;
 							thisTime = thisTime+1;
-						} 
+							}
+						}
+
+
+//						else
+//						{
+//							List<Int> tgt = read(tgts, aIndex);
+//							List<Int> src = read(srcs, aIndex);
+//							write(tgts, aIndex, Cons(target, tgt));
+//							write(srcs, aIndex, Cons(source, src));
+//							aliveDelegates = aliveDelegates + 1;
+//							thisTime = thisTime+1;
+//						} 
 					}
 					else
 					{
@@ -324,27 +344,27 @@ class Worker(Int workerId, Int size) implements IWorker {
 //	}
      await this.aliveDelegates == 0;
 
- // For testing; local conflict check
- 	i = 0;
- 	j = 0;
- 	while (i<=div(size, d())-1)
- 	{
- 		List<Int> pastDraws = Nil;
- 		j = 0;
- 		while (j<=d()-1)
- 		{
- 			Int index = i * d() + j ;
- 			//u = nth(arrr, index);
-			u = read(arr, index).get;
- 			//println(toString(u));
- 			if (isElem(u,pastDraws) || u == 0) 
- 				println(toString(u));
- 			else 
- 				pastDraws = Cons(u,pastDraws);
- 			j = j + 1;
- 		} 
- 		i = i + 1;
- 	}
+  //For testing; local conflict check
+// 	i = 0;
+// 	j = 0;
+// 	while (i<=div(size, d())-1)
+// 	{
+// 		List<Int> pastDraws = Nil;
+// 		j = 0;
+// 		while (j<=d()-1)
+// 		{
+// 			Int index = i * d() + j ;
+// 			//u = nth(arrr, index);
+//			u = read(arr, index).get;
+// 			//println(toString(u));
+// 			if (isElem(u,pastDraws) || u == 0) 
+// 				println(toString(u));
+// 			else 
+// 				pastDraws = Cons(u,pastDraws);
+// 			j = j + 1;
+// 		} 
+// 		i = i + 1;
+// 	}
 
    }
    Unit pass(List<Int> src, List<Int> tgt, Int aIn, IWorker w)

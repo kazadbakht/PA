@@ -170,7 +170,7 @@ class Worker(Int workerId, Int size) implements IWorker {
 								if (isElem(v,pastDraws)) j = j - 1;
 								else {
 									pastDraws = Cons(v,pastDraws);
-									read(arr, localIndex(target)).pro_give(u);
+									read(arr, localIndex(target)).pro_give(v);
 								}
 							}
 							_ =>	{
