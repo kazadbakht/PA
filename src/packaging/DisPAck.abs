@@ -299,7 +299,10 @@ class Worker(Int workerId, Int size) implements IWorker {
 //					write(ltgts, delInx, clone(read(tgts, iw)));
 				}
 				iw = iw + 1;
+				suspend;
+				//await (aliveDelegates < 100000);
 			}
+
 //			fd = this!delegates(clone(fsrcs), clone(ltgts), delInx); // or await (aliveDelegates < 10);
 			thisTime = 0;
 			//srcs = Nil; 
