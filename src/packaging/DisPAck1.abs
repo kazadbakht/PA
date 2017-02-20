@@ -43,11 +43,11 @@ def Vector<A> toVector<A>(List<A> l) = fromList(l);
 
 // Parameters to the PA problem
 //////////////////////////
-def Int num() = 5000000;         // the maximum people we want to simulate
+def Int num() = 1000000;         // the maximum people we want to simulate
 def Int d() = 3;               // the attachment (friendliness) degree
 def Int kinit() = d() * (d() + 1); // the given initial clique "social" connections (cells, edges*2) (the initial social is a complete graph)
 def Int workers() = numCapabilities();         // how many workers (threads) running in parallel
-def Int packSize() = 2000;
+def Int packSize() = 1000;
 
 // Utility functions
 def Bool isElem<A>(A l, List<A> ls) = case ls {
@@ -295,7 +295,8 @@ class Worker(Int workerId, Int size) implements IWorker {
 				IWorker w = nth(ws2, iw);
 				if (tmp != Nil) {
 //					delInx = delInx + 1;
-					this!pass(reverse(tmp) , reverse(read(tgts, iw)), workerId-1, w);
+//					this!pass(reverse(tmp) , reverse(read(tgts, iw)), workerId-1, w);
+					w!requests(reverse(tmp) , reverse(read(tgts, iw)), workerId-1);
 //					write(fsrcs, delInx, fsrc);
 //					write(ltgts, delInx, clone(read(tgts, iw)));
 				}
@@ -327,7 +328,8 @@ class Worker(Int workerId, Int size) implements IWorker {
 				IWorker w = nth(ws2, iw);
 				if (tmp != Nil) {
 //					delInx = delInx + 1;
-					this!pass(reverse(tmp) , reverse(read(tgts, iw)), workerId-1, w);
+//					this!pass(reverse(tmp) , reverse(read(tgts, iw)), workerId-1, w);
+					w!requests(reverse(tmp) , reverse(read(tgts, iw)), workerId-1);
 //					write(fsrcs, delInx, fsrc);
 //					write(ltgts, delInx, clone(read(tgts, iw)));
 				}
@@ -371,10 +373,10 @@ class Worker(Int workerId, Int size) implements IWorker {
 // 	}
 
    }
-   Unit pass(List<Int> src, List<Int> tgt, Int aIn, IWorker w)
-	{
-		w!requests(src , tgt, aIn);
-	}
+//   Unit pass(List<Int> src, List<Int> tgt, Int aIn, IWorker w)
+//	{
+//		w!requests(src , tgt, aIn);
+//	}
 
    Int request(Int source){ // to return the requested slot of the worker when it is resolved
 	   Int n = 0;
