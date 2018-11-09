@@ -93,8 +93,8 @@ class Worker(Int workerId, Int size) implements IWorker {
 //	   initArrr = Cons(0, Nil);
 	  this.arr = unsafeNew(size + 1); 
 	  this.initArr = unsafeNew(kinit()+1); 
-	  this.srcs = unsafeNew(workers()+1); 
-	  this.tgts = unsafeNew(workers()+1); 
+	  this.srcs = unsafeNew(workers()); 
+	  this.tgts = unsafeNew(workers()); 
 
      // START INIT clique of the graph
 
@@ -532,7 +532,7 @@ class Worker(Int workerId, Int size) implements IWorker {
 			    Int u2 = uniformR(Pair(kinit()+1,u), this.g);//random(u-kinit()) + kinit() + 1;
 			    IWorker w = nth(ws2, actorIndex(u2));
 			    Fut<Int> fp = w!request(u2);
-			    this.delegate(fp, target);
+			    this!delegate(fp, target);
 			}
 			else { // the slot is resolved
 			    //arrr = writenth(arrr, localIndex(target), u, Nil);
@@ -578,7 +578,7 @@ class Worker(Int workerId, Int size) implements IWorker {
 		    Int u2 = uniformR(Pair(kinit()+ 1,u), this.g); //random(u-kinit()) + kinit() + 1;
 		    IWorker w = nth(ws2, actorIndex(u2));
 		    Fut<Int> fp = w!request(u2);
-		    this.delegate(fp, target);
+		    this!delegate(fp, target);
      }
      else { // the slot is resolved
 		    //arrr = writenth(arrr, localIndex(target), u, Nil);
